@@ -160,6 +160,7 @@ endif()
 # Additional compiler flags used when compiling TF Lite.
 set(TFLITE_TARGET_PUBLIC_OPTIONS "")
 set(TFLITE_TARGET_PRIVATE_OPTIONS "")
+set(TFLITE_TARGET_PRIVATE_DEFINITIONS  "")
 # Additional library dependencies based upon enabled features.
 set(TFLITE_TARGET_DEPENDENCIES "")
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang$")
@@ -193,6 +194,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
         set(${CompFlag} "${${CompFlag}}" CACHE INTERNAL "")
       endforeach()
     endif()
+    list(APPEND TFLITE_TARGET_PRIVATE_DEFINITIONS "_USE_MATH_DEFINES")
   elseif(CMAKE_COMPILER_IS_GNUCXX)
     list(APPEND TFLITE_TARGET_PRIVATE_OPTIONS "-Wa,-mbig-obj")
   endif()
@@ -527,6 +529,9 @@ endif()
 target_compile_options(tensorflow-lite
   PUBLIC ${TFLITE_TARGET_PUBLIC_OPTIONS}
   PRIVATE ${TFLITE_TARGET_PRIVATE_OPTIONS}
+)
+target_compile_definitions(tensorflow-lite
+  PRIVATE ${TFLITE_TARGET_PRIVATE_DEFINITIONS}
 )
 add_library(tensorflow::tensorflowlite ALIAS tensorflow-lite)
 
