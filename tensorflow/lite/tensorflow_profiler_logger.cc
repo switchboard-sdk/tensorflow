@@ -15,8 +15,6 @@ limitations under the License.
 
 #include "tensorflow/lite/tensorflow_profiler_logger.h"
 
-#include <malloc.h>
-
 #include <algorithm>
 #include <string>
 
