@@ -97,7 +97,7 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitDeviceMathCall(
         }
       }
       output_type = F32;
-      ABSL_FALLTHROUGH_INTENDED;
+      [[fallthrough]];
     case F32:
       break;
     case F64:
@@ -110,7 +110,7 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitDeviceMathCall(
       ObtainDeviceFunctionName(funcid, output_type, b());
   llvm::Value* result = EmitMathCall(munged_callee, converted_operands,
                                      converted_input_types, output_type, name)
-                            .ValueOrDie();
+                            .value();
   if (cast_result_to_fp16) {
     result = FPCast(result, b()->getHalfTy());
   }

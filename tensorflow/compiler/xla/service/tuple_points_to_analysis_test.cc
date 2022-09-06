@@ -58,8 +58,7 @@ class TuplePointsToAnalysisTest : public HloTestBase {
 
   void RunAnalysis() {
     CHECK_NOTNULL(module_.get());
-    points_to_analysis_ =
-        TuplePointsToAnalysis::Run(module_.get()).ConsumeValueOrDie();
+    points_to_analysis_ = TuplePointsToAnalysis::Run(module_.get()).value();
   }
 
   // Returns the LogicalBuffer defined at the given instruction and
@@ -109,8 +108,7 @@ class TuplePointsToAnalysisTest : public HloTestBase {
       const HloInstruction* instruction, const ShapeIndex& index,
       absl::Span<const std::pair<HloInstruction*, ShapeIndex>> expected) {
     const LogicalBuffer* buffer =
-        points_to_analysis_->GetBufferDefinedAt(instruction, index)
-            .ValueOrDie();
+        points_to_analysis_->GetBufferDefinedAt(instruction, index).value();
     std::vector<BufferAlias> expected_aliases;
     expected_aliases.reserve(expected.size());
     for (auto& pair : expected) {

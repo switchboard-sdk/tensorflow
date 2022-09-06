@@ -18,17 +18,12 @@ load(
     "tf_additional_lib_hdrs",
     "tf_additional_tensor_coding_deps",
     "tf_additional_test_srcs",
-    "tf_cuda_libdevice_path_deps",
-    "tf_fingerprint_deps",
     "tf_google_mobile_srcs_no_runtime",
     "tf_google_mobile_srcs_only_runtime",
     "tf_kernel_tests_linkstatic",
-    "tf_logging_deps",
     "tf_platform_alias",
     "tf_platform_deps",
-    "tf_protobuf_compiler_deps",
     "tf_protobuf_deps",
-    "tf_resource_deps",
     "tf_testing_deps",
     "tf_windows_aware_platform_deps",
 )
@@ -81,9 +76,7 @@ package_group(
 exports_files(
     [
         "context.h",
-        "cpu_info.cc",
         "cpu_info.h",
-        "cuda_libdevice_path.h",
         "bfloat16.h",
         "demangle.h",
         "env.cc",
@@ -134,6 +127,7 @@ cc_library(
     deps = [
         ":errors",
         ":status",
+        ":stringpiece",
     ],
 )
 
@@ -142,8 +136,8 @@ cc_library(
     hdrs = ["bfloat16.h"],
     compatible_with = get_compatible_with_portable(),
     deps = [
-        ":byte_order",
-        "//third_party/eigen3",
+        "//tensorflow/core/platform:byte_order",
+        "//tensorflow/tsl/platform:bfloat16",
     ],
 )
 
@@ -160,6 +154,7 @@ cc_library(
     name = "byte_order",
     hdrs = ["byte_order.h"],
     compatible_with = get_compatible_with_portable(),
+    deps = ["//tensorflow/tsl/platform:byte_order"],
 )
 
 cc_library(
@@ -196,7 +191,8 @@ cc_library(
     compatible_with = get_compatible_with_portable(),
     deps = [
         ":platform",
-    ] + tf_platform_deps("crash_analysis"),
+        "//tensorflow/tsl/platform:crash_analysis",
+    ],
 )
 
 cc_library(
@@ -207,6 +203,7 @@ cc_library(
         ":byte_order",
         ":logging",
         ":platform_port",
+        "//tensorflow/tsl/platform:platform_port",
         "@com_google_absl//absl/base",
     ],
 )
@@ -215,6 +212,7 @@ cc_library(
     name = "casts",
     hdrs = ["casts.h"],
     deps = [
+        "//tensorflow/tsl/platform:casts",
         ":platform",
     ] + tf_platform_deps("casts"),
 )
@@ -225,14 +223,9 @@ cc_library(
     compatible_with = [],
     deps = [
         ":platform",
-        "//tensorflow/stream_executor/cuda:cuda_activation_header",
+        "//tensorflow/compiler/xla/stream_executor/cuda:cuda_activation_header",
+        "//tensorflow/tsl/platform:cuda",
     ],
-)
-
-cc_library(
-    name = "cuda_libdevice_path",
-    textual_hdrs = ["cuda_libdevice_path.h"],
-    deps = tf_cuda_libdevice_path_deps(),
 )
 
 cc_library(
@@ -243,6 +236,7 @@ cc_library(
         ":macros",
         ":platform",
         ":platform_port",
+        "//tensorflow/tsl/platform:platform_port",
     ],
 )
 
@@ -263,7 +257,8 @@ cc_library(
     compatible_with = get_compatible_with_portable(),
     deps = [
         ":platform",
-    ] + tf_platform_deps("dynamic_annotations"),
+        "//tensorflow/tsl/platform:dynamic_annotations",
+    ],
 )
 
 cc_library(
@@ -318,26 +313,27 @@ cc_library(
     deps = [
         ":stringpiece",
         ":types",
-    ] + tf_fingerprint_deps(),
+        "//tensorflow/tsl/platform:fingerprint",
+    ],
 )
 
 cc_library(
     name = "gif",
     hdrs = ["gif.h"],
     deps = [
-        "@gif",
+        "//tensorflow/tsl/platform:gif",
     ],
 )
 
 cc_library(
     name = "hash",
-    srcs = ["hash.cc"],
     hdrs = ["hash.h"],
     deps = [
         ":macros",
         ":raw_coding",
         ":stringpiece",
         ":types",
+        "//tensorflow/tsl/platform:hash",
     ],
 )
 
@@ -351,7 +347,7 @@ cc_library(
     name = "jpeg",
     hdrs = ["jpeg.h"],
     deps = [
-        "@libjpeg_turbo//:jpeg",
+        "//tensorflow/tsl/platform:jpeg",
     ],
 )
 
@@ -379,21 +375,26 @@ cc_library(
     name = "logging",
     compatible_with = get_compatible_with_portable(),
     textual_hdrs = ["logging.h"],
-    deps = tf_logging_deps(),
+    deps = [
+        "//tensorflow/core/platform:types",
+        "//tensorflow/tsl/platform:logging",
+    ],
 )
 
 cc_library(
     name = "macros",
     hdrs = ["macros.h"],
     compatible_with = get_compatible_with_portable(),
+    deps = [
+        "//tensorflow/tsl/platform:macros",
+    ],
 )
 
 filegroup(
     name = "xla_cpu_runtime_srcs",
     srcs = tf_platform_deps("xla_cpu_runtime_srcs") + [
         "cord.h",
-        "ctstring.h",
-        "ctstring_internal.h",
+        ":ctstring",
         "dynamic_annotations.h",
         "env_time.h",
         "macros.h",
@@ -401,7 +402,7 @@ filegroup(
         "tstring.h",
         "types.h",
     ] + if_windows([
-        "//tensorflow/core/platform/windows:xla_cpu_runtime_srcs",
+        "//tensorflow/tsl/platform/windows:xla_cpu_runtime_srcs",
     ]),
 )
 
@@ -415,7 +416,9 @@ cc_library(
 cc_library(
     name = "net",
     textual_hdrs = ["net.h"],
-    deps = tf_windows_aware_platform_deps("net"),
+    deps = [
+        "//tensorflow/tsl/platform:net",
+    ] + tf_windows_aware_platform_deps("net"),
 )
 
 cc_library(
@@ -478,6 +481,9 @@ cc_library(
     name = "platform",
     hdrs = ["platform.h"],
     compatible_with = get_compatible_with_portable(),
+    deps = [
+        "//tensorflow/tsl/platform",
+    ],
 )
 
 cc_library(
@@ -491,7 +497,12 @@ cc_library(
         "numa.h",
         "snappy.h",
     ],
-    deps = tf_windows_aware_platform_deps("platform_port"),
+    deps = [
+        "//tensorflow/core/platform:dynamic_annotations",
+        "//tensorflow/core/platform:logging",
+        "//tensorflow/core/platform:types",
+        "//tensorflow/tsl/platform:platform_port",
+    ],
 )
 
 cc_library(
@@ -501,6 +512,9 @@ cc_library(
         "platform_strings_computed.h",
     ],
     hdrs = ["platform_strings.h"],
+    deps = [
+        "//tensorflow/tsl/platform:platform_strings",
+    ],
 )
 
 cc_library(
@@ -515,7 +529,7 @@ cc_library(
 cc_library(
     name = "prefetch",
     hdrs = ["prefetch.h"],
-    deps = [":platform"],
+    deps = ["//tensorflow/tsl/platform:prefetch"],
 )
 
 cc_library(
@@ -529,12 +543,6 @@ cc_library(
         ":platform",
         ":types",
     ] + tf_protobuf_deps(),
-)
-
-cc_library(
-    name = "protobuf_compiler",
-    hdrs = ["protobuf_compiler.h"],
-    deps = tf_protobuf_compiler_deps(),
 )
 
 cc_library(
@@ -564,6 +572,7 @@ cc_library(
     deps = [
         ":byte_order",
         ":types",
+        "//tensorflow/tsl/platform:raw_coding",
     ],
 )
 
@@ -594,7 +603,7 @@ tf_cc_test(
 cc_library(
     name = "intrusive_ptr",
     hdrs = ["intrusive_ptr.h"],
-    deps = [],
+    deps = ["//tensorflow/tsl/platform:intrusive_ptr"],
 )
 
 tf_cc_test(
@@ -615,8 +624,7 @@ cc_library(
     name = "regexp",
     hdrs = ["regexp.h"],
     deps = [
-        ":platform",
-        "@com_googlesource_code_re2//:re2",
+        "//tensorflow/tsl/platform:regexp",
     ],
 )
 
@@ -625,14 +633,17 @@ cc_library(
     textual_hdrs = ["resource.h"],
     deps = [
         ":stringpiece",
-    ] + tf_resource_deps(),
+        "//tensorflow/tsl/platform:resource",
+    ],
 )
 
 cc_library(
     name = "resource_loader",
     testonly = 1,
     textual_hdrs = ["resource_loader.h"],
-    deps = tf_testing_deps("resource_loader"),
+    deps = [
+        "//tensorflow/tsl/platform:resource_loader",
+    ],
 )
 
 cc_library(
@@ -646,7 +657,7 @@ cc_library(
     hdrs = if_rocm_is_configured(["rocm.h"]),
     deps = if_rocm_is_configured([
         ":platform",
-        "//tensorflow/stream_executor/rocm:rocm_activation",
+        "//tensorflow/compiler/xla/stream_executor/rocm:rocm_activation",
     ]),
 )
 
@@ -676,7 +687,8 @@ cc_library(
     hdrs = ["stacktrace.h"],
     deps = [
         ":platform",
-    ] + tf_windows_aware_platform_deps("stacktrace"),
+        "//tensorflow/tsl/platform:stacktrace",
+    ],
 )
 
 filegroup(
@@ -689,13 +701,17 @@ filegroup(
 cc_library(
     name = "stacktrace_handler",
     textual_hdrs = ["stacktrace_handler.h"],
-    deps = tf_windows_aware_platform_deps("stacktrace_handler"),
+    deps = [
+        "//tensorflow/tsl/platform:stacktrace_handler",
+    ],
     alwayslink = 1,
 )
 
 cc_library(
     name = "stack_frame",
     hdrs = ["stack_frame.h"],
+    compatible_with = get_compatible_with_portable(),
+    deps = ["//tensorflow/tsl/platform:stack_frame"],
 )
 
 cc_library(
@@ -715,7 +731,9 @@ cc_library(
         "//tensorflow/core/protobuf:error_codes_proto_impl_cc",
         "//tensorflow/core/protobuf:for_core_protos_cc",
         "@com_google_absl//absl/base",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/types:optional",
     ],
 )
@@ -753,14 +771,12 @@ cc_library(
 
 cc_library(
     name = "str_util",
-    srcs = ["str_util.cc"],
     hdrs = ["str_util.h"],
     deps = [
-        ":logging",
         ":macros",
         ":stringpiece",
         ":types",
-        "@com_google_absl//absl/strings",
+        "//tensorflow/tsl/platform:str_util",
     ],
 )
 
@@ -783,17 +799,17 @@ cc_library(
     hdrs = ["stringpiece.h"],
     compatible_with = get_compatible_with_portable(),
     deps = [
-        "@com_google_absl//absl/strings",
+        "//tensorflow/tsl/platform:stringpiece",
     ],
 )
 
 cc_library(
     name = "stringprintf",
-    srcs = ["stringprintf.cc"],
     hdrs = ["stringprintf.h"],
     deps = [
         ":macros",
         ":types",
+        "//tensorflow/tsl/platform:stringprintf",
     ],
 )
 
@@ -864,7 +880,7 @@ cc_library(
     deps = [
         ":mutex",
         ":types",
-        "//third_party/eigen3",
+        "//tensorflow/tsl/platform:threadpool_interface",
     ],
 )
 
@@ -886,14 +902,15 @@ cc_library(
 cc_library(
     name = "tstring",
     hdrs = [
-        "ctstring.h",
+        "ctstring.h",  #TODO(ddunleavy) make this cleaner later. only depend on tstring.h
         "ctstring_internal.h",
         "tstring.h",
     ],
     compatible_with = get_compatible_with_portable(),
     deps = [
-        ":cord",
-        ":stringpiece",
+        "//tensorflow/core/platform:cord",
+        "//tensorflow/core/platform:stringpiece",
+        "//tensorflow/tsl/platform:tstring",
     ],
 )
 
@@ -902,7 +919,9 @@ filegroup(
     srcs = [
         "ctstring.h",
         "ctstring_internal.h",
+        "//tensorflow/tsl/platform:ctstring",
     ],
+    compatible_with = get_compatible_with_portable(),
 )
 
 cc_library(
@@ -910,10 +929,11 @@ cc_library(
     hdrs = ["types.h"],
     compatible_with = get_compatible_with_portable(),
     deps = [
-        ":platform",
         ":bfloat16",
+        ":platform",
         ":tstring",
-    ] + tf_platform_deps("types"),
+        "//tensorflow/tsl/platform:types",
+    ],
 )
 
 cc_library(
@@ -1057,6 +1077,7 @@ cc_binary(
         ":threadpool_options",
         ":tstring",
         ":types",
+        "//tensorflow/tsl/platform:build_test",
     ] + if_not_android([":rocm_rocdl_path"]),
 )
 
@@ -1070,7 +1091,8 @@ tf_cuda_library(
     ],
     features = ["-parse_headers"],
     deps = [
-        "//tensorflow/core/platform/default/build_config:stream_executor",
+        "//tensorflow/tsl/platform:cuda",
+        "//tensorflow/tsl/platform/default/build_config:stream_executor",
     ],
 )
 
@@ -1084,7 +1106,7 @@ cc_library(
     ],
     features = ["-parse_headers"],
     deps = [
-        "//tensorflow/core/platform/default/build_config:stream_executor_no_cuda",
+        "//tensorflow/tsl/platform/default/build_config:stream_executor_no_cuda",
     ],
 )
 
@@ -1153,6 +1175,29 @@ cc_library(
     compatible_with = get_compatible_with_portable(),
 )
 
+# For a more maintainable build this target should not exist and the headers
+# should  be split into the existing cc_library targets, but this change was
+# automatically  done so that we can remove long standing issues and complexity
+# in the build system. It's up to the OWNERS of this package to get rid of it or
+# not. The use of the textual_hdrs attribute is discouraged, use hdrs instead.
+# Here it is used to avoid header parsing errors in packages where the feature
+# parse_headers was enabled since loose headers were not being parsed. See
+# go/loose-lsc-one-target-approach for more details.
+cc_library(
+    name = "loose_headers",
+    tags = ["avoid_dep"],
+    textual_hdrs = [
+        "rocm.h",
+        "stream_executor.h",
+    ],
+    visibility = [
+        "//tensorflow/contrib/fused_conv:__pkg__",
+        "//tensorflow/contrib/image:__pkg__",
+        "//tensorflow/core/kernels:__pkg__",
+        "//tensorflow/core/kernels/image:__pkg__",
+    ],
+)
+
 filegroup(
     name = "enable_tf2_hdr",
     srcs = ["enable_tf2_utils.h"],
@@ -1163,7 +1208,6 @@ tf_cc_tests(
     name = "low_level_library_tests",
     size = "small",
     srcs = [
-        "fingerprint_test.cc",
         "integral_types_test.cc",
         "logging_test.cc",
         "mutex_test.cc",
@@ -1277,6 +1321,7 @@ tf_cc_test(
         "//tensorflow/core:lib",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
+        "//tensorflow/tsl/platform:resource_loader",
     ],
 )
 
@@ -1518,8 +1563,6 @@ filegroup(
     srcs = [
         "byte_order.h",
         "cord.h",
-        "ctstring.h",
-        "ctstring_internal.h",
         "env_time.h",
         "logging.h",
         "macros.h",
@@ -1529,6 +1572,7 @@ filegroup(
         "threadpool_options.h",
         "tstring.h",
         "types.h",
+        ":ctstring",
     ],
     compatible_with = get_compatible_with_portable(),
     visibility = ["//tensorflow/core:__pkg__"],
@@ -1581,11 +1625,13 @@ filegroup(
         "subprocess.h",
         "thread_annotations.h",
         ":base_hdrs",
-        # copybara:uncomment(GoogleFileSystem) "//tensorflow/core/platform/google:env.h",
         "//tensorflow/core/platform/profile_utils:android_armv7a_cpu_utils_helper.h",
         "//tensorflow/core/platform/profile_utils:clock_cycle_profiler.h",
         "//tensorflow/core/platform/profile_utils:cpu_utils.h",
         "//tensorflow/core/platform/profile_utils:i_cpu_utils_helper.h",
+        "//tensorflow/tsl/platform:base_hdrs",
+        "//tensorflow/tsl/platform:lib_hdrs",
+        # copybara:uncomment(GoogleFileSystem) "//tensorflow/tsl/platform/google:env.h",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -1593,8 +1639,6 @@ filegroup(
 filegroup(
     name = "lib_proto_parsing_hdrs",
     srcs = [
-        "ctstring.h",
-        "ctstring_internal.h",
         "init_main.h",
         "logging.h",
         "macros.h",
@@ -1603,6 +1647,7 @@ filegroup(
         "stringpiece.h",
         "tstring.h",
         "types.h",
+        ":ctstring",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -1632,8 +1677,6 @@ filegroup(
         "bfloat16.h",
         "byte_order.h",
         "cpu_info.h",
-        "ctstring.h",
-        "ctstring_internal.h",
         "dynamic_annotations.h",
         "macros.h",
         "mutex.h",
@@ -1643,6 +1686,7 @@ filegroup(
         "thread_annotations.h",
         "tstring.h",
         "types.h",
+        ":ctstring",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -1701,13 +1745,12 @@ filegroup(
     name = "tflite_portable_logging_hdrs",
     srcs = [
         "bfloat16.h",
-        "ctstring.h",
-        "ctstring_internal.h",
         "logging.h",
         "macros.h",
         "platform.h",
         "tstring.h",
         "types.h",
+        ":ctstring",
     ],
     compatible_with = get_compatible_with_portable(),
     visibility = [
@@ -1720,8 +1763,6 @@ filegroup(
     name = "jpeg_internal_hdrs",
     srcs = [
         "bfloat16.h",
-        "ctstring.h",
-        "ctstring_internal.h",
         "dynamic_annotations.h",
         "logging.h",
         "macros.h",
@@ -1730,6 +1771,8 @@ filegroup(
         "stringpiece.h",
         "tstring.h",
         "types.h",
+        ":ctstring",
+        "//tensorflow/tsl/platform:jpeg_internal_hdrs",
     ],
     visibility = [
         "//tensorflow/core:__pkg__",
@@ -1741,8 +1784,6 @@ filegroup(
     name = "gif_internal_hdrs",
     srcs = [
         "bfloat16.h",
-        "ctstring.h",
-        "ctstring_internal.h",
         "dynamic_annotations.h",
         "logging.h",
         "macros.h",
@@ -1750,6 +1791,8 @@ filegroup(
         "platform.h",
         "tstring.h",
         "types.h",
+        ":ctstring",
+        "//tensorflow/tsl/platform:gif_internal_hdrs",
     ],
     visibility = [
         "//tensorflow/core:__pkg__",
@@ -1771,10 +1814,8 @@ filegroup(
         "coding.h",
         "context.h",
         "cord.h",
-        "cpu_info.cc",
         "cpu_info.h",
-        "ctstring.h",
-        "ctstring_internal.h",
+        ":ctstring",
         "demangle.h",
         "denormal.cc",
         "denormal.h",
@@ -1788,7 +1829,6 @@ filegroup(
         "file_system.cc",
         "file_system.h",
         "file_system_helper.h",
-        "hash.cc",
         "hash.h",
         "host_info.h",
         "init_main.h",
@@ -1825,12 +1865,10 @@ filegroup(
         "statusor.h",
         "statusor_internals.h",
         "statusor.cc",
-        "str_util.cc",
         "str_util.h",
         "strcat.cc",
         "strcat.h",
         "stringpiece.h",
-        "stringprintf.cc",
         "stringprintf.h",
         "tensor_coding.cc",
         "tensor_coding.h",
@@ -1840,10 +1878,11 @@ filegroup(
         "tracing.h",
         "tstring.h",
         "types.h",
+        "//tensorflow/tsl/platform:mobile_srcs_no_runtime",
     ] + selects.with_or({
         "//tensorflow:fuchsia": tf_google_mobile_srcs_no_runtime(),
         "//conditions:default": [
-            "//tensorflow/core/platform/default:mobile_srcs_no_runtime",
+            "//tensorflow/tsl/platform/default:mobile_srcs_no_runtime",
             "file_system_helper.cc",
             "threadpool.cc",
             "tracing.cc",
@@ -1865,11 +1904,6 @@ filegroup(
         "platform_strings.h",
         "platform_strings_computed.h",
         "png.h",
-        "//tensorflow/core/platform/profile_utils:android_armv7a_cpu_utils_helper.cc",
-        "//tensorflow/core/platform/profile_utils:android_armv7a_cpu_utils_helper.h",
-        "//tensorflow/core/platform/profile_utils:cpu_utils.cc",
-        "//tensorflow/core/platform/profile_utils:cpu_utils.h",
-        "//tensorflow/core/platform/profile_utils:i_cpu_utils_helper.h",
         "protobuf_internal.h",
         "random.cc",
         "random.h",
@@ -1877,7 +1911,13 @@ filegroup(
         "test_benchmark.h",
         "threadpool_options.h",
         "unbounded_work_queue.h",
-        "//tensorflow/core/platform/default:mobile_srcs_only_runtime",
+        "//tensorflow/core/platform/profile_utils:android_armv7a_cpu_utils_helper.cc",
+        "//tensorflow/core/platform/profile_utils:android_armv7a_cpu_utils_helper.h",
+        "//tensorflow/core/platform/profile_utils:cpu_utils.cc",
+        "//tensorflow/core/platform/profile_utils:cpu_utils.h",
+        "//tensorflow/core/platform/profile_utils:i_cpu_utils_helper.h",
+        "//tensorflow/tsl/platform:mobile_srcs_only_runtime",
+        "//tensorflow/tsl/platform/default:mobile_srcs_only_runtime",
     ] + tf_google_mobile_srcs_only_runtime(),
     visibility = ["//tensorflow/core:__pkg__"],
 )
