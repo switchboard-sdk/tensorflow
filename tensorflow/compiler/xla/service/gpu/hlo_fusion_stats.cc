@@ -42,31 +42,23 @@ class OpcodeCollector : public ConstDfsHloVisitorWithDefault {
         break;
       case HloOpcode::kParameter:
         break;
-      // Unary
-      case HloOpcode::kAbs:
-      case HloOpcode::kCbrt:
-      case HloOpcode::kCeil:
-      case HloOpcode::kCos:
-      case HloOpcode::kExp:
-      case HloOpcode::kExpm1:
-      case HloOpcode::kFloor:
-      case HloOpcode::kLog:
-      case HloOpcode::kLog1p:
-      case HloOpcode::kLogistic:
-      case HloOpcode::kNegate:
-      case HloOpcode::kRoundNearestAfz:
-      case HloOpcode::kRoundNearestEven:
-      case HloOpcode::kRsqrt:
-      case HloOpcode::kSign:
-      case HloOpcode::kSin:
-      case HloOpcode::kSqrt:
-      case HloOpcode::kTanh:
-      // Binary
       case HloOpcode::kAdd:
-      case HloOpcode::kAtan2:
-      case HloOpcode::kDivide:
-      case HloOpcode::kMultiply:
       case HloOpcode::kSubtract:
+      case HloOpcode::kMultiply:
+      case HloOpcode::kDivide:
+      case HloOpcode::kAbs:
+      case HloOpcode::kNegate:
+      case HloOpcode::kSign:
+      case HloOpcode::kCeil:
+      case HloOpcode::kFloor:
+      case HloOpcode::kAtan2:
+      case HloOpcode::kSin:
+      case HloOpcode::kCos:
+      case HloOpcode::kTanh:
+      case HloOpcode::kExp:
+      case HloOpcode::kLog:
+      case HloOpcode::kSqrt:
+      case HloOpcode::kRsqrt:
         opcodes_.insert("cwise");
         break;
       default:

@@ -27,23 +27,24 @@ limitations under the License.
 namespace tensorflow {
 namespace quantization {
 
-PyObject* QuantizeQatModel(absl::string_view saved_model_path,
-                           absl::string_view exported_names_str,
-                           absl::string_view tags,
-                           absl::string_view quant_opts_serialized);
+PyObject* QuantizeQATModel(const absl::string_view saved_model_path,
+                           const absl::string_view exported_names_str,
+                           const absl::string_view tags,
+                           const std::string& quant_opts_serialized);
 
-PyObject* QuantizePtqDynamicRange(absl::string_view saved_model_path,
-                                  absl::string_view exported_names_str,
-                                  absl::string_view tags,
-                                  absl::string_view quant_opts_serialized);
+PyObject* QuantizePTQDynamicRange(const absl::string_view saved_model_path,
+                                  const absl::string_view exported_names_str,
+                                  const absl::string_view tags,
+                                  const std::string& quant_opts_serialized);
 
-PyObject* QuantizePtqModelPreCalibration(absl::string_view saved_model_path,
-                                         absl::string_view exported_names_str,
-                                         absl::string_view tags);
+PyObject* QuantizePTQModelPreCalibration(
+    const absl::string_view saved_model_path,
+    const absl::string_view exported_names_str, const absl::string_view tags);
 
-PyObject* QuantizePtqModelPostCalibration(
-    absl::string_view saved_model_path, absl::string_view exported_names_str,
-    absl::string_view tags, absl::string_view quant_opts_serialized);
+PyObject* QuantizePTQModelPostCalibration(
+    const absl::string_view saved_model_path,
+    const absl::string_view exported_names_str, const absl::string_view tags,
+    const std::string& quant_opts_serialized);
 
 void ClearCollectedInformationFromCalibrator();
 

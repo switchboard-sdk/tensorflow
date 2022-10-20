@@ -18,12 +18,10 @@ limitations under the License.
 #include <memory>
 
 #include "tensorflow/compiler/xla/service/hlo_evaluator.h"
-#include "tensorflow/compiler/xla/service/hlo_instruction.h"
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/test.h"
 #include "tensorflow/compiler/xla/tests/hlo_test_base.h"
-#include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/core/platform/test.h"
 
 namespace xla {
@@ -41,7 +39,7 @@ class HloCreationUtilsTest : public HloTestBase {
     auto module = CreateNewVerifiedModule("test");
     *entry_computation = module->AddEntryComputation(
         CreateComputationWithSignature({&input_shape}, output_shape, "entry")
-            .value());
+            .ValueOrDie());
     *param = (*entry_computation)->parameter_instruction(0);
     return module;
   }
@@ -56,7 +54,7 @@ class HloCreationUtilsTest : public HloTestBase {
     auto module = CreateNewVerifiedModule("test");
     *entry_computation = module->AddEntryComputation(
         CreateComputationWithSignature({&input_shape}, output_shape, "entry")
-            .value());
+            .ValueOrDie());
     *param = (*entry_computation)->parameter_instruction(0);
     return module;
   }
@@ -352,7 +350,7 @@ TEST_F(HloCreationUtilsTest, MaybeMakeTupleTuplizesMultipleOperands) {
   HloComputation* entry_computation = module->AddEntryComputation(
       CreateComputationWithSignature({&input_shape0, &input_shape1},
                                      output_shape, "entry")
-          .value());
+          .ValueOrDie());
   HloInstruction* output =
       MaybeMakeTuple({entry_computation->parameter_instruction(1),
                       entry_computation->parameter_instruction(0)});
@@ -367,44 +365,6 @@ TEST_F(HloCreationUtilsTest, MaybeMakeTupleTuplizesMultipleOperands) {
       evaluator.Evaluate(*module, {input0.Clone(), input1.Clone()}));
   Literal expected_result = LiteralUtil::MakeTuple({&input1, &input0});
   EXPECT_EQ(result_literal, expected_result);
-}
-TEST_F(HloCreationUtilsTest, DynamicUpdateSliceVectorStartIndices) {
-  auto module = CreateNewVerifiedModule("dus-creation-test");
-  // arg:
-  // f32[2,3] {
-  //  { 1, 2, 3 },
-  //  { 5, 6, 7 },
-  // }
-  auto operand_array = std::make_unique<Array2D<double>>(2, 3);
-  operand_array->FillUnique(1.0);
-  auto operand_literal =
-      LiteralUtil::CreateR2FromArray2D<double>(*operand_array);
-  Shape input_shape = ShapeUtil::MakeShape(F64, {2, 3});
-  Shape update_shape = ShapeUtil::MakeShape(F64, {2, 2});
-  HloComputation* entry_computation = module->AddEntryComputation(
-      CreateComputationWithSignature({&input_shape, &update_shape}, input_shape,
-                                     "entry")
-          .ValueOrDie());
-  auto zero = module->entry_computation()->AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<int32_t>(0)));
-  auto one = module->entry_computation()->AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<int32_t>(1)));
-  auto update = LiteralUtil::CreateR2<double>({{-2.0, -3.0}, {-6.0, -7.0}});
-  HloInstruction* dus =
-      MakeDynamicUpdateSliceHlo(entry_computation->parameter_instruction(0),
-                                entry_computation->parameter_instruction(1),
-                                {zero, one})
-          .ValueOrDie();
-  entry_computation->set_root_instruction(dus);
-  HloEvaluator evaluator;
-  TF_ASSERT_OK_AND_ASSIGN(
-      Literal result, evaluator.Evaluate(*module, {&operand_literal, &update}));
-  auto expected = LiteralUtil::CreateR2<double>({
-      {1, -2, -3},
-      {5, -6, -7},
-  });
-
-  EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
 }
 
 }  // namespace

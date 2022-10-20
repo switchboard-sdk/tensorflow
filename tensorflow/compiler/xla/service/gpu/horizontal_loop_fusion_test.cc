@@ -68,21 +68,23 @@ TEST_F(HorizontalLoopFusionTest, BasicTest) {
        tuple(fusion.1, fusion.2)
  }
 )")
-                    .value();
+                    .ValueOrDie();
 
-  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).value());
-  EXPECT_FALSE(HloDCE().Run(module.get()).value());
+  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).ValueOrDie());
+  EXPECT_TRUE(HloDCE().Run(module.get()).ValueOrDie());
 
   const HloInstruction* entry_root =
       module->entry_computation()->root_instruction();
-  EXPECT_THAT(entry_root, op::Tuple(op::GetTupleElement(op::Fusion()),
-                                    op::GetTupleElement(op::Fusion())));
+  EXPECT_THAT(entry_root,
+              op::Tuple(op::Bitcast(op::GetTupleElement(op::Fusion())),
+                        op::Bitcast(op::GetTupleElement(op::Fusion()))));
 
-  const HloInstruction* fusion = entry_root->operand(0)->operand(0);
+  const HloInstruction* fusion = entry_root->operand(0)->operand(0)->operand(0);
   ASSERT_TRUE(fusion->IsMultiOutputFusion());
   EXPECT_THAT(
       fusion->fused_expression_root(),
-      op::Tuple(op::Slice(op::Concatenate()), op::Slice(op::Concatenate())));
+      op::Tuple(op::Slice(op::Concatenate(op::Reshape(), op::Reshape())),
+                op::Slice(op::Concatenate(op::Reshape(), op::Reshape()))));
 }
 
 // Horizontal fusion should not be triggered as fusion will create cycles.
@@ -118,9 +120,9 @@ TEST_F(HorizontalLoopFusionTest, NegativeTestForCycle) {
        tuple(fusion.1, fusion.2, add.2)
  }
 )")
-                    .value();
+                    .ValueOrDie();
 
-  EXPECT_FALSE(GpuHorizontalLoopFusion().Run(module.get()).value());
+  EXPECT_FALSE(GpuHorizontalLoopFusion().Run(module.get()).ValueOrDie());
 }
 
 TEST_F(HorizontalLoopFusionTest, NegativeTestForIncompatibleTypes) {
@@ -154,9 +156,9 @@ TEST_F(HorizontalLoopFusionTest, NegativeTestForIncompatibleTypes) {
        tuple(fusion.1, fusion.2)
  }
 )")
-                    .value();
+                    .ValueOrDie();
 
-  EXPECT_FALSE(GpuHorizontalLoopFusion().Run(module.get()).value());
+  EXPECT_FALSE(GpuHorizontalLoopFusion().Run(module.get()).ValueOrDie());
 }
 
 TEST_F(HorizontalLoopFusionTest, HorizontalLoopFusionAfterVerticalFusion) {
@@ -182,31 +184,16 @@ TEST_F(HorizontalLoopFusionTest, HorizontalLoopFusionAfterVerticalFusion) {
   add.2       = f32[321,5]{1,0} add(mul.2.1, mul.2.2)
   ROOT tuple = (f32[4,1024]{1,0}, f32[321,5]{1,0}) tuple(add.1, add.2)
 })")
-                    .value();
+                    .ValueOrDie();
 
   HloPassPipeline fusion("fusion");
   fusion.AddPass<xla::gpu::GpuInstructionFusion>(/*may_duplicate=*/false);
   fusion.AddPass<xla::gpu::GpuInstructionFusion>(/*may_duplicate=*/true);
-  EXPECT_TRUE(fusion.Run(module.get()).value());
-  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).value());
+  EXPECT_TRUE(fusion.Run(module.get()).ValueOrDie());
+  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).ValueOrDie());
 
   VLOG(2) << "Dump after horizontal fusion:";
   VLOG(2) << module->ToString();
-
-  const HloInstruction* entry_root =
-      module->entry_computation()->root_instruction();
-  // Check that we add bitcast when needed.
-  EXPECT_THAT(entry_root,
-              op::Tuple(op::Bitcast(op::GetTupleElement(op::Fusion())),
-                        op::Bitcast(op::GetTupleElement(op::Fusion()))));
-  const HloInstruction* fusion_instr =
-      entry_root->operand(0)->operand(0)->operand(0);
-  ASSERT_TRUE(fusion_instr->IsMultiOutputFusion());
-
-  EXPECT_THAT(
-      fusion_instr->fused_expression_root(),
-      op::Tuple(op::Slice(op::Concatenate(op::Reshape(), op::Reshape())),
-                op::Slice(op::Concatenate(op::Reshape(), op::Reshape()))));
 
   EXPECT_TRUE(RunAndCompareNoHloPasses(std::move(module), ErrorSpec{0, 0}));
 }
@@ -293,10 +280,10 @@ TEST_F(HorizontalLoopFusionTest, FusingDifferentOutputs) {
        tuple(gte.1, gte.2, gte.3, gte.4)
  }
 )")
-                    .value();
+                    .ValueOrDie();
 
-  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).value());
-  EXPECT_TRUE(HloDCE().Run(module.get()).value());
+  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).ValueOrDie());
+  EXPECT_TRUE(HloDCE().Run(module.get()).ValueOrDie());
 
   VLOG(2) << "Dump after horizontal fusion:";
   VLOG(2) << module->ToString();
@@ -422,10 +409,10 @@ TEST_F(HorizontalLoopFusionTest, DynamicUpdateSlice) {
     f2 = f16[5,9,10] fusion(p.01, p.11, p.21), kind=kLoop, calls=fusion.2
     ROOT tuple = (f16[5,9,10],f16[5,9,10]) tuple(f1, f2)
   })")
-                    .value();
+                    .ValueOrDie();
 
-  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).value());
-  EXPECT_FALSE(HloDCE().Run(module.get()).value());
+  EXPECT_TRUE(GpuHorizontalLoopFusion().Run(module.get()).ValueOrDie());
+  EXPECT_TRUE(HloDCE().Run(module.get()).ValueOrDie());
 
   VLOG(2) << "Dump after horizontal fusion:";
   VLOG(2) << module->ToString();
@@ -462,9 +449,9 @@ TEST_F(HorizontalLoopFusionTest, NegativeTestForSharedParam) {
        tuple(fusion.1, fusion.2)
  }
 )")
-                    .value();
+                    .ValueOrDie();
 
-  EXPECT_FALSE(GpuHorizontalLoopFusion().Run(module.get()).value());
+  EXPECT_FALSE(GpuHorizontalLoopFusion().Run(module.get()).ValueOrDie());
 }
 
 TEST_F(HorizontalLoopFusionTest, IterativeHorizontalFusion) {
@@ -502,19 +489,20 @@ TEST_F(HorizontalLoopFusionTest, IterativeHorizontalFusion) {
    ROOT tuple.1 = (f16[123]{0}, f16[456]{0}) tuple(fusion.0, fusion.1)
  }
 )")
-                    .value();
+                    .ValueOrDie();
 
   HloPassFix<HloPassPipeline> iterative_h_fusion("iterative_h_fusion");
   iterative_h_fusion.AddPass<GpuHorizontalLoopFusion>();
   iterative_h_fusion.AddPass<HloDCE>();
-  EXPECT_TRUE(iterative_h_fusion.Run(module.get()).value());
+  EXPECT_TRUE(iterative_h_fusion.Run(module.get()).ValueOrDie());
 
   // Verify that fusion.0 and fusion.1 are fused.
   const HloInstruction* entry_root =
       module->entry_computation()->root_instruction();
-  EXPECT_THAT(entry_root, op::Tuple(op::GetTupleElement(op::Fusion()),
-                                    op::GetTupleElement(op::Fusion())));
-  const HloInstruction* fusion = entry_root->operand(0)->operand(0);
+  EXPECT_THAT(entry_root,
+              op::Tuple(op::Bitcast(op::GetTupleElement(op::Fusion())),
+                        op::Bitcast(op::GetTupleElement(op::Fusion()))));
+  const HloInstruction* fusion = entry_root->operand(0)->operand(0)->operand(0);
   EXPECT_TRUE(fusion->IsMultiOutputFusion());
 
   // Verify that the total number of fusion instructions is 2 so that we
@@ -578,11 +566,11 @@ TEST_F(HorizontalLoopFusionTest, TraversalOrder) {
        tuple(f32[256,256]{1,0} %fusion.1, f32[256,256]{1,0} %fusion)
  }
 )")
-                    .value();
+                    .ValueOrDie();
 
   HloPassFix<HloPassPipeline> iterative_h_fusion("iterative_h_fusion");
   iterative_h_fusion.AddPass<GpuHorizontalLoopFusion>();
-  EXPECT_TRUE(iterative_h_fusion.Run(module.get()).value());
+  EXPECT_TRUE(iterative_h_fusion.Run(module.get()).ValueOrDie());
 
   // Verify that the total number of fusion instructions is 2 so that we
   // know all the sqrt instructions are fused into a kernel. Note that if we

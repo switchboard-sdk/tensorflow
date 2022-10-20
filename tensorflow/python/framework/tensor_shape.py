@@ -17,6 +17,8 @@ import functools
 import operator
 from typing import Optional, Sequence, Type
 
+import six
+
 from tensorflow.core.framework import tensor_shape_pb2
 from tensorflow.core.function import trace_type
 from tensorflow.python import tf2
@@ -211,10 +213,10 @@ class Dimension(object):
         # TODO(b/143206389): Remove once we fully migrate to 3.X.
         self._value = int(value.__index__())
       except AttributeError:
-        raise TypeError(
-            "Dimension value must be integer or None or have "
-            "an __index__ method, got value '{0!r}' with type '{1!r}'".format(
-                value, type(value))) from None
+        six.raise_from(
+            TypeError("Dimension value must be integer or None or have "
+                      "an __index__ method, got value '{0!r}' with type '{1!r}'"
+                      .format(value, type(value))), None)
       if self._value < 0:
         raise ValueError("Dimension %d must be >= 0" % self._value)
 
@@ -797,11 +799,13 @@ class TensorShape(trace.TraceType, trace_type.Serializable):
           try:
             self._dims.append(as_dimension(d).value)
           except TypeError as e:
-            raise TypeError(
-                "Failed to convert '{0!r}' to a shape: '{1!r}'"
-                "could not be converted to a dimension. A shape should "
-                "either be single dimension (e.g. 10), or an iterable of "
-                "dimensions (e.g. [1, 10, None]).".format(dims, d)) from e
+            six.raise_from(
+                TypeError(
+                    "Failed to convert '{0!r}' to a shape: '{1!r}'"
+                    "could not be converted to a dimension. A shape should "
+                    "either be single dimension (e.g. 10), or an iterable of "
+                    "dimensions (e.g. [1, 10, None])."
+                    .format(dims, d)), e)
         self._dims = tuple(self._dims)
 
   @property

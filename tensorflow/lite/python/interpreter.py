@@ -41,7 +41,7 @@ else:
 # pylint: enable=g-import-not-at-top
 
 
-class Delegate:
+class Delegate(object):
   """Python wrapper class to manage TfLiteDelegate objects.
 
   The shared library is expected to have two functions:
@@ -95,7 +95,7 @@ class Delegate:
       options_keys[idx] = str(key).encode('utf-8')
       options_values[idx] = str(value).encode('utf-8')
 
-    class ErrorMessageCapture:
+    class ErrorMessageCapture(object):
 
       def __init__(self):
         self.message = ''
@@ -178,7 +178,7 @@ def load_delegate(library, options=None):
   return delegate
 
 
-class SignatureRunner:
+class SignatureRunner(object):
   """SignatureRunner class for running TFLite models using SignatureDef.
 
   This class should be instantiated through TFLite Interpreter only using
@@ -352,7 +352,7 @@ def _get_op_resolver_id(op_resolver_type=OpResolverType.AUTO):
 
 
 @_tf_export('lite.Interpreter')
-class Interpreter:
+class Interpreter(object):
   """Interpreter interface for running TensorFlow Lite models.
 
   Models obtained from `TfLiteConverter` can be run in Python with

@@ -150,7 +150,9 @@ void CreateDTensorMLIRPass(const mlir::TF::StandardPipelineOptions &options,
   // do not have shape information. We can infer the shapes of these
   // outputs from the tf.AssignVariableOps that consume these outputs.
   // This pass fills in all missing shapes caused by tf.RestoreV2 ops.
-  pm->addPass(CreateDTensorInferShapesForRestoreV2Op());
+  if (DTensorCheckpointV2Enabled()) {
+    pm->addPass(CreateDTensorInferShapesForRestoreV2Op());
+  }
 
   pm->addPass(CreateDTensorLayoutPropagationPassV2());
 

@@ -578,13 +578,13 @@ class _ModelHandlerManagerBase(metaclass=abc.ABCMeta):
   @classmethod
   @abc.abstractmethod
   def model_handler_cls(cls):
-    """The model handler class. ModelHandleV1/ModelHandlerV2."""
+    """The modle handler class. ModelHandleV1/ModelHandlerV2."""
 
   @property
   @classmethod
   @abc.abstractmethod
   def trt_model_handler_cls(cls):
-    """The TensorRT model handler class. TrtModelHandleV1/TrtModelHandlerV2."""
+    """The TensorRTmodle handler class. TrtModelHandleV1/TrtModelHandlerV2."""
 
   @property
   def name(self) -> str:

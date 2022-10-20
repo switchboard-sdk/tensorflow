@@ -40,10 +40,10 @@ class HloLiveRangeTest : public HloTestBase {
   ~HloLiveRangeTest() override {}
 
   void Analyze(const HloSchedule& schedule) {
-    alias_analysis_ = HloAliasAnalysis::Run(module_.get()).value();
+    alias_analysis_ = HloAliasAnalysis::Run(module_.get()).ValueOrDie();
     hlo_live_range_ = HloLiveRange::Run(schedule, *alias_analysis_,
                                         module_->entry_computation())
-                          .value();
+                          .ValueOrDie();
   }
 
   std::unique_ptr<HloModule> module_;

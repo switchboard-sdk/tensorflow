@@ -23,6 +23,7 @@ import time
 import types
 
 from absl import app
+import six
 
 from tensorflow.core.protobuf import config_pb2
 from tensorflow.core.protobuf import rewriter_config_pb2
@@ -50,7 +51,7 @@ OVERRIDE_GLOBAL_THREADPOOL = "TF_OVERRIDE_GLOBAL_THREADPOOL"
 
 def _rename_function(f, arg_num, name):
   """Rename the given function's name appears in the stack trace."""
-  func_code = f.__code__
+  func_code = six.get_function_code(f)
   if sys.version_info > (3, 8, 0, "alpha", 3):
     # Python3.8 / PEP570 added co_posonlyargcount argument to CodeType.
     new_code = types.CodeType(
@@ -213,10 +214,10 @@ class ParameterizedBenchmark(_BenchmarkRegistrar):
         # function name in the stack trace.
         attrs[benchmark_name] = _rename_function(benchmark, 1, benchmark_name)
 
-    return super().__new__(mcs, clsname, base, attrs)
+    return super(mcs, ParameterizedBenchmark).__new__(mcs, clsname, base, attrs)
 
 
-class Benchmark(metaclass=_BenchmarkRegistrar):
+class Benchmark(six.with_metaclass(_BenchmarkRegistrar, object)):
   """Abstract class that provides helper functions for running benchmarks.
 
   Any class subclassing this one is immediately registered in the global
@@ -308,7 +309,7 @@ class TensorFlowBenchmark(Benchmark):
     # Allow TensorFlow runtime to allocate a new threadpool with different
     # number of threads for each new benchmark.
     os.environ[OVERRIDE_GLOBAL_THREADPOOL] = "1"
-    super().__init__()
+    super(TensorFlowBenchmark, self).__init__()
 
   @classmethod
   def is_abstract(cls):

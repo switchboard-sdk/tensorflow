@@ -89,7 +89,6 @@ PACKAGE_STATIC_DEPS = [
     "@local_execution_config_platform//:__subpackages__",
     "@mkl_dnn_acl_compatible//:__subpackages__",
     "@mkl_dnn_v1//:__subpackages__",
-    "@nccl_archive//:__subpackages__",
     "@org_sqlite//:__subpackages__",
     "@platforms//:__subpackages__",
     "@snappy//:__subpackages__",
@@ -329,40 +328,16 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# Sometimes Bazel reports darwin_x86_64 as "darwin" and sometimes as
-# "darwin_x86_64". The former shows up when building on a Mac x86_64 host for a Mac x86_64 target.
-# The latter shows up when cross-compiling for Mac x86_64 from a Mac ARM machine and in internal
-# Google builds.
 config_setting(
-    name = "macos_x86_64_default",
-    flag_values = if_google(
-        {"//tools/cpp:cc_target_os": "apple"},
-        {},
-    ),
-    values = {
-        "apple_platform_type": "macos",
-        "cpu": "darwin",
-    },
-)
-
-config_setting(
-    name = "macos_x86_64_crosscompile",
-    flag_values = if_google(
-        {"//tools/cpp:cc_target_os": "apple"},
-        {},
-    ),
-    values = {
-        "apple_platform_type": "macos",
-        "cpu": "darwin_x86_64",
-    },
-)
-
-selects.config_setting_group(
     name = "macos_x86_64",
-    match_any = [
-        ":macos_x86_64_default",
-        ":macos_x86_64_crosscompile",
-    ],
+    flag_values = if_google(
+        {"//tools/cpp:cc_target_os": "apple"},
+        {},
+    ),
+    values = {
+        "apple_platform_type": "macos",
+        "cpu": if_google("darwin_x86_64", "darwin"),
+    },
     visibility = ["//visibility:public"],
 )
 
@@ -915,19 +890,6 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-# copybara:uncomment_begin(configurable API loading)
-# bool_flag(
-#     name = "enable_api_indexable",
-#     build_setting_default = False,
-# )
-#
-# config_setting(
-#     name = "api_indexable",
-#     flag_values = {":enable_api_indexable": "True"},
-#     visibility = ["//visibility:public"],
-# )
-# copybara:uncomment_end
-
 # DO NOT ADD ANY NEW EXCEPTIONS TO THIS LIST!
 # Instead, please use public APIs or public build rules TF provides.
 # If you need functionality that is not exposed, we will work with you to expand our public APIs.
@@ -940,12 +902,9 @@ package_group(
         "//learning/brain/mlir/...",
         "//learning/brain/tfrt/...",
         "//learning/lib/ami/simple_ml/...",
-        "//learning/pathways/...",
-        "//smartass/brain/configure/...",
         "//tensorflow/...",
         "//tensorflow_decision_forests/...",
         "//tensorflow_federated/...",
-        "//third_party/cloud_tpu/convergence_tools/sdc_monitoring/...",
         "//third_party/cloud_tpu/inference_converter/...",
         "//third_party/py/cloud_ml_autoflow/...",
         "//third_party/py/envlogger/...",
@@ -983,7 +942,7 @@ bzl_library(
     deps = [
         "//tensorflow/core/platform:build_config_root_bzl",
         "//tensorflow/core/platform:rules_cc_bzl",
-        "//tensorflow/tsl/platform/default:cuda_build_defs_bzl",
+        "//tensorflow/core/platform/default:cuda_build_defs_bzl",
         "//third_party/compute_library:build_defs_bzl",
         "//third_party/llvm_openmp:openmp_bzl",
         "//third_party/mkl:build_defs_bzl",
@@ -1040,6 +999,38 @@ cc_library(
 # global symbol table in order to support op registration. This means that
 # projects building with Bazel and importing TensorFlow as a dependency will not
 # depend on libtensorflow_framework.so unless they opt in.
+#
+# DEBUGGING DUPLICATE INITIALIZATION
+# ----------------------------------
+#
+# Having a dynamic library introduces a diamond dependency problem:
+# if a target X is depended on by both libtensorflow_framework.so and the
+# users of libtensorflow_framework.so, the definitions will get duplicated.
+# This causes global initializers which need to be run exactly once (e.g.
+# protobuf registration) to crash, as the initialization is run once from the
+# statically linked in global, and one by the global which comes in from
+# libtensorflow_framework.so.
+# Even worse, global objects which need to be singletons for semantical
+# correctness (e.g. registers) might get duplicated.
+#
+# In order to avoid these HARD TO DEBUG CRASHES, it is sufficient to follow
+# these rules:
+#  - All globals with non-trivial static constructors or for which a
+#    single identity is required (e.g. registers) need to live in `*_impl`
+#    targets.
+#
+#  - An `*_impl` target has to be (transitively) included into
+#    `libtensorflow_framework.so`.
+#
+#  - A target T1 can depend on `*_impl` target T2 only if:
+#
+#    -> It's a tf_cc_shared_object, and there is no other tf_cc_shared_object
+#       transitively depending on T2.
+#    -> It's an `*_impl` target by itself
+#    -> The dependency is guarded by `if_static`. This is discouraged,
+#       as it diverges dependency topology between static and dynamic TF.
+#
+# TODO(cheshire): Write tests to check for rule violations.
 tf_cc_shared_library(
     name = "tensorflow_framework",
     additional_linker_inputs = [
@@ -1082,9 +1073,9 @@ tf_cc_shared_library(
         "//tensorflow/core/grappler/optimizers:custom_graph_optimizer_registry_impl",
         "//tensorflow/core:lib_internal_impl",
         "//tensorflow/core/profiler:profiler_impl",
-        "//tensorflow/core/util:determinism",  # Must be linked and exported to libtensorflow_framework.so.
+        "//tensorflow/core/util:determinism",
         "//tensorflow/lite/kernels/shim:tf_kernel_shim",
-        "//tensorflow/compiler/xla/stream_executor:stream_executor_impl",
+        "//tensorflow/stream_executor:stream_executor_impl",
     ] + tf_additional_binary_deps(),
     soversion = VERSION,
     static_deps = PACKAGE_STATIC_DEPS,
@@ -1219,7 +1210,7 @@ tf_cc_shared_library(
         "//tensorflow/core/profiler:profiler_impl",
         "//tensorflow/core/util:determinism",
         "//tensorflow/lite/kernels/shim:tf_kernel_shim",
-        "//tensorflow/compiler/xla/stream_executor:stream_executor_impl",
+        "//tensorflow/stream_executor:stream_executor_impl",
     ] + tf_additional_binary_deps(),
 )
 
@@ -1324,7 +1315,6 @@ genrule(
         "//tensorflow/c/eager:headers",
         "//tensorflow/cc:headers",
         "//tensorflow/core:headers",
-        "//tensorflow/stream_executor:stream",
     ],
     outs = ["include"],
     cmd = """

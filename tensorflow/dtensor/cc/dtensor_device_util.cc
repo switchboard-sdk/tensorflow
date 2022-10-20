@@ -208,7 +208,8 @@ Status ParseAttrMap(const Node& node, absl::string_view indices_attr,
     const auto arg_index = indices->int_val(i);
     const auto& arg_layout = layouts[i];
     indices_layout_map->emplace(
-        arg_index, tensorflow::dtensor::Layout::FromString(arg_layout).value());
+        arg_index,
+        tensorflow::dtensor::Layout::FromString(arg_layout).ValueOrDie());
   }
   return OkStatus();
 }

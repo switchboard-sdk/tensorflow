@@ -45,14 +45,14 @@ LocalClient* GetOrCreateLocalClientOrDie(
   StatusOr<LocalClient*> result =
       ClientLibrary::GetOrCreateLocalClient(client_options);
   TF_CHECK_OK(result.status()) << " could not create local client for testing";
-  return result.value();
+  return result.ValueOrDie();
 }
 
 // Helper functions to get the reference platform.
 se::Platform* GetReferencePlatform() {
   auto result = PlatformUtil::GetPlatform(kInterpreter);
   TF_CHECK_OK(result.status()) << "could not get interpreter platform";
-  return result.value();
+  return result.ValueOrDie();
 }
 
 }  // namespace
@@ -154,7 +154,7 @@ std::string ClientLibraryTestBase::ExecuteToString(
   if (!result.ok()) {
     return result.status().ToString();
   } else {
-    return result.value().ToString();
+    return result.ValueOrDie().ToString();
   }
 }
 

@@ -16,7 +16,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/pjrt/host_callback.h"
 
 #include <cstring>
-#include <utility>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -69,8 +68,8 @@ TEST(HostCallbackTest, Basic) {
   TestPjRtHostMemoryForDeviceManager test_host_memory_for_device_manager;
 
   auto context = CreateHostCallbackStateAndAppendSendRecvCallbacks(
-      std::move(host_callback), &test_host_memory_for_device_manager,
-      send_callbacks, recv_callbacks);
+      &host_callback, &test_host_memory_for_device_manager, send_callbacks,
+      recv_callbacks);
 
   PjRtTransferMetadata metadata;
   metadata.device_shape = shape;

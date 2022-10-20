@@ -14,7 +14,6 @@
 # ==============================================================================
 """Utils for make_zip tests."""
 import functools
-import io
 import itertools
 import operator
 import os
@@ -25,6 +24,7 @@ import traceback
 import zipfile
 
 import numpy as np
+from six import StringIO
 import tensorflow.compat.v1 as tf
 
 from google.protobuf import text_format
@@ -75,8 +75,6 @@ MAP_TF_TO_NUMPY_TYPE = {
     tf.float32: np.float32,
     tf.float16: np.float16,
     tf.float64: np.float64,
-    tf.complex64: np.complex64,
-    tf.complex128: np.complex128,
     tf.int32: np.int32,
     tf.uint32: np.uint32,
     tf.uint8: np.uint8,
@@ -89,7 +87,7 @@ MAP_TF_TO_NUMPY_TYPE = {
 }
 
 
-class ExtraConvertOptions:
+class ExtraConvertOptions(object):
   """Additional options for conversion, besides input, output, shape."""
 
   def __init__(self):
@@ -205,7 +203,7 @@ def write_examples(fp, examples):
       write_tensor(fp, name, value)
 
 
-class TextFormatWriter:
+class TextFormatWriter(object):
   """Utility class for writing ProtoBuf like messages."""
 
   def __init__(self, fp, name=None, parent=None):
@@ -629,12 +627,12 @@ def make_zip_of_tests(options,
               "outputs": baseline_output_map
           }
 
-          example_fp = io.StringIO()
+          example_fp = StringIO()
           write_examples(example_fp, [example])
           zipinfo = zipfile.ZipInfo(zip_path_label + ".inputs")
           archive.writestr(zipinfo, example_fp.getvalue(), zipfile.ZIP_DEFLATED)
 
-          example_fp2 = io.StringIO()
+          example_fp2 = StringIO()
           write_test_cases(example_fp2, zip_path_label + ".bin", [example])
           zipinfo = zipfile.ZipInfo(zip_path_label + "_tests.txt")
           archive.writestr(zipinfo, example_fp2.getvalue(),
@@ -665,7 +663,7 @@ def make_zip_of_tests(options,
       convert_report.append((param_dict, report))
 
   if not options.no_conversion_report:
-    report_io = io.StringIO()
+    report_io = StringIO()
     report_lib.make_report_table(report_io, zip_path, convert_report)
     if options.multi_gen_state:
       zipinfo = zipfile.ZipInfo("report_" + options.multi_gen_state.test_name +

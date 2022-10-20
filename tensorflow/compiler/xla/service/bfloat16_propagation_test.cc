@@ -69,7 +69,7 @@ class BFloat16PropagationTest : public HloTestBase {
     BFloat16Propagation propagation(&bfloat16_support);
     StatusOr<bool> result = propagation.Run(module);
     EXPECT_IS_OK(result.status());
-    return result.value();
+    return result.ValueOrDie();
   }
 
   // Returns whether the given HloInstruction's output element type is BF16 or

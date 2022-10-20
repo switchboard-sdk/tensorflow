@@ -1,5 +1,4 @@
 load("//tensorflow:tensorflow.bzl", "pybind_extension")
-load("//tensorflow:tensorflow.bzl", "VERSION")
 
 package(
     default_visibility = [
@@ -33,11 +32,7 @@ pybind_extension(
         "tac_wrapper_pybind11.cc",
     ],
     hdrs = ["tac_wrapper.h"],
-    dynamic_deps = select({
-        "//tensorflow:macos": ["//tensorflow:libtensorflow_framework.%s.dylib" % VERSION],
-        "//tensorflow:windows": [],
-        "//conditions:default": ["//tensorflow:libtensorflow_framework.so.%s" % VERSION],
-    }),
+    link_in_framework = True,
     static_deps = [
         "@arm_neon_2_x86_sse//:__subpackages__",
         "@bazel_tools//:__subpackages__",

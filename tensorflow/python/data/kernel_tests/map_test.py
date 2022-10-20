@@ -124,7 +124,7 @@ def _short_circuit_test_cases():
   return functools.reduce(reduce_fn, cases, [])
 
 
-class Foo:
+class Foo(object):
   """Dummy class used for invalid return value tests."""
 
   def __init__(self):
@@ -576,7 +576,7 @@ class MapTest(test_base.DatasetTestBase, parameterized.TestCase):
     dataset = dataset_ops.Dataset.zip((labels, images))
 
     @attr.s(cmp=True)
-    class Example:
+    class Example(object):
       label = attr.ib()
       image = attr.ib()
 

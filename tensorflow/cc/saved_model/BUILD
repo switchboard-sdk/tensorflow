@@ -177,6 +177,7 @@ tf_cc_test(
         "//tensorflow/core:lib",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
+        "//tensorflow/core:testlib",
         "//tensorflow/core/platform:test",
     ],
 )
@@ -380,15 +381,9 @@ cc_library(
         "//tensorflow/python:__pkg__",
     ],
     deps = [
-        ":constants",
-        "//tensorflow/core/graph/regularization:simple_delete",
-        "//tensorflow/core/graph/regularization:util",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/platform:types",
-        "//tensorflow/core/util/tensor_bundle:naming",
-        "@com_google_protobuf//:protobuf_headers",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/strings",
+        "//tensorflow/core/grappler:op_types",
     ] + if_not_mobile(["//tensorflow/core:lib"]) + if_android(["//tensorflow/core:portable_tensorflow_lib_lite"]),
     alwayslink = True,
 )
@@ -399,7 +394,7 @@ cc_library(
     visibility = ["//tensorflow/python/saved_model:__subpackages__"],
     deps = if_static([
         ":fingerprinting_impl",
-        "@com_google_absl//absl/strings",
+        "//tensorflow/core/protobuf:for_core_protos_cc",
         "//tensorflow/core:protos_all_cc",
     ]) + if_not_mobile(["//tensorflow/core:lib"]) + if_android(["//tensorflow/core:portable_tensorflow_lib_lite"]),
 )

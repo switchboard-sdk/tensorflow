@@ -22,7 +22,6 @@ limitations under the License.
 
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/protobuf.h"
-#include "tensorflow/core/platform/stringpiece.h"
 
 namespace tensorflow {
 class DeviceAttributes;

@@ -211,7 +211,7 @@ StatusOr<mlir::Operation*> RelayoutSPMDExpander::ExpandOp(mlir::Operation* op) {
                       layout_attr.str(),
                       value_or_status.status().error_message())
             .str());
-  mlir::Value output = value_or_status.value();
+  mlir::Value output = value_or_status.ValueOrDie();
   relayout.output().replaceAllUsesWith(output);
   relayout.erase();
   return output.getDefiningOp();

@@ -17,9 +17,7 @@ limitations under the License.
 
 #include <cstring>
 #include <memory>
-
 #include "tensorflow/core/platform/errors.h"
-#include "tensorflow/core/platform/stringpiece.h"
 
 namespace tensorflow {
 namespace {

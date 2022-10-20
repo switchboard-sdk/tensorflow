@@ -124,12 +124,6 @@ FRAMEWORK_LIB_HDRS = STABLE_FRAMEWORK_LIB_HDRS + [
     "signature_runner.h",
 ]
 
-# Private header files that are included from the public API header files.
-STABLE_FRAMEWORK_LIB_IMPL_HDRS = [
-    "core/subgraph.h",
-    "signature_runner.h",
-]
-
 exports_files(
     FRAMEWORK_LIB_HDRS,
     visibility = ["//tensorflow/lite/core/shims:__subpackages__"],
@@ -166,22 +160,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "arena_planner_with_profiler",
-    testonly = True,
-    srcs = ["arena_planner.cc"],
-    hdrs = ["arena_planner.h"],
-    compatible_with = get_compatible_with_portable(),
-    copts = tflite_copts_warnings() + ["-DTF_LITE_TENSORFLOW_PROFILER"],
-    deps = [
-        ":graph_info",
-        ":memory_planner",
-        ":simple_memory_arena_with_profiler",
-        ":util",
-        "//tensorflow/lite/c:common",
-    ],
-)
-
 cc_test(
     name = "arena_planner_test",
     size = "small",
@@ -190,7 +168,7 @@ cc_test(
         "tflite_not_portable_android",
     ],
     deps = [
-        ":arena_planner_with_profiler",
+        ":arena_planner",
         ":graph_info",
         "//tensorflow/core:tflite_portable_logging",
         "//tensorflow/lite/c:common",
@@ -273,24 +251,9 @@ cc_library(
     srcs = ["simple_memory_arena.cc"],
     hdrs = ["simple_memory_arena.h"],
     compatible_with = get_compatible_with_portable(),
-    copts = tflite_copts() + tflite_copts_warnings(),
+    copts = tflite_copts_warnings(),
     deps = [
         ":macros",
-        ":tensorflow_profiler_logger_shim",
-        "//tensorflow/lite/c:common",
-    ],
-)
-
-cc_library(
-    name = "simple_memory_arena_with_profiler",
-    testonly = True,
-    srcs = ["simple_memory_arena.cc"],
-    hdrs = ["simple_memory_arena.h"],
-    compatible_with = get_compatible_with_portable(),
-    copts = tflite_copts() + tflite_copts_warnings() + ["-DTF_LITE_TENSORFLOW_PROFILER"],
-    deps = [
-        ":macros",
-        ":tensorflow_profiler_logger_shim",
         "//tensorflow/lite/c:common",
     ],
 )
@@ -451,8 +414,8 @@ alias(
 # TODO(ahentz): investigate dependency on gemm_support requiring usage of tf_copts.
 cc_library(
     name = "framework_stable",
-    srcs = STABLE_FRAMEWORK_LIB_IMPL_HDRS,
-    hdrs = STABLE_FRAMEWORK_LIB_HDRS,
+    srcs = [],
+    hdrs = FRAMEWORK_LIB_HDRS,
     compatible_with = get_compatible_with_portable(),
     copts = tflite_copts() + tflite_copts_warnings(),
     deps = [
@@ -542,6 +505,8 @@ alias(
 cc_library(
     name = "cc_api_stable",
     srcs = [
+        "core/subgraph.cc",
+        "core/subgraph.h",
         "interpreter.cc",
         "interpreter_builder.cc",
         "logger.cc",
@@ -565,7 +530,10 @@ cc_library(
     deps = [
         ":allocation",
         ":external_cpu_backend_context",
+        ":graph_info",
+        ":kernel_api",
         ":macros",
+        ":memory_planner",
         ":minimal_logging",
         ":model_builder",
         ":mutable_op_resolver",
@@ -573,11 +541,12 @@ cc_library(
         ":simple_memory_arena",
         ":stderr_reporter",
         ":string",
-        ":subgraph",
         ":tensorflow_profiler_logger_shim",
         ":type_to_tflitetype",
         ":util",
         ":version",
+        "@flatbuffers//:runtime_cc",
+        "@ruy//ruy:denormal",
         "//tensorflow/lite/c:c_api_types",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/c:common_internal",
@@ -593,9 +562,14 @@ cc_library(
         "//tensorflow/lite/profiling:root_profiler",
         "//tensorflow/lite/schema:schema_fbs",
         "//tensorflow/lite/schema:schema_utils",
-        "@flatbuffers//:runtime_cc",
-        "@ruy//ruy:denormal",
-    ],
+    ] + select({
+        ":tflite_use_simple_memory_planner": [
+            ":simple_planner",
+        ],
+        "//conditions:default": [
+            ":arena_planner",
+        ],
+    }),
     alwayslink = 1,  # TODO(b/161243354): eliminate this.
 )
 
@@ -632,6 +606,8 @@ cc_library(
         ":builtin_ops",
         ":cc_api_stable",
         ":external_cpu_backend_context",
+        ":graph_info",
+        ":kernel_api",
         ":macros",
         ":memory_planner",
         ":minimal_logging",
@@ -640,51 +616,14 @@ cc_library(
         ":string",
         ":type_to_tflitetype",
         ":util",
+        "@flatbuffers//:runtime_cc",
+        "@ruy//ruy:denormal",
         "//tensorflow/lite/c:c_api_types",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/core/api",
         "//tensorflow/lite/core/api:verifier",
         "//tensorflow/lite/experimental/resource",
         "//tensorflow/lite/internal:signature_def",
-        "//tensorflow/lite/profiling:root_profiler",
-        "//tensorflow/lite/schema:schema_fbs",
-        "@flatbuffers//:runtime_cc",
-        "@ruy//ruy:denormal",
-    ],
-    alwayslink = 1,  # TODO(b/161243354): eliminate this.
-)
-
-# TODO(b/161243354): move this target to core/BUILD, once we've
-# added a BUILD file there.  (Unfortunately that isn't completely
-# straightforward due to core/macros.h being exposed as a public header
-# in the :framework_stable target.)
-cc_library(
-    name = "subgraph",
-    srcs = [
-        "core/subgraph.cc",
-        "interpreter_options.h",
-    ],
-    hdrs = [
-        "core/subgraph.h",
-    ],
-    compatible_with = get_compatible_with_portable(),
-    copts = tflite_copts() + tflite_copts_warnings(),
-    visibility = [
-        "//tensorflow/lite/kernels:__subpackages__",
-    ],
-    deps = [
-        ":allocation",
-        ":graph_info",
-        ":kernel_api",
-        ":macros",
-        ":memory_planner",
-        ":minimal_logging",
-        ":util",
-        "//tensorflow/lite/c:c_api_types",
-        "//tensorflow/lite/c:common",
-        "//tensorflow/lite/c:common_internal",
-        "//tensorflow/lite/core/api",
-        "//tensorflow/lite/experimental/resource",
         "//tensorflow/lite/profiling:root_profiler",
         "//tensorflow/lite/schema:schema_fbs",
     ] + select({
@@ -1014,7 +953,6 @@ cc_test(
         "testdata/test_model_broken.bin",
         "testdata/test_model_redux_precision.bin",
         "testdata/while_op_with_forwarding_input.bin",
-        "testdata/zero_size_constant.bin",
     ],
     tags = [
         "no_windows",  # TODO(b/194459105): the test is flaky.
@@ -1025,8 +963,7 @@ cc_test(
         ":framework",
         ":interpreter_test_util",
         ":string",
-        ":string_util",
-        "//tensorflow/lite/c:common",
+        "//tensorflow/lite:string_util",
         "//tensorflow/lite/core/api",
         "//tensorflow/lite/core/api:verifier",
         "//tensorflow/lite/kernels:builtin_ops",

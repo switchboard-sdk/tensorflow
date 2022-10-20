@@ -22,6 +22,8 @@ import sys
 
 from absl.testing import parameterized
 import numpy as np
+from six.moves import range
+from six.moves import zip
 import tensorflow as tf
 
 # Force loaded shared object symbols to be globally visible. This is needed so

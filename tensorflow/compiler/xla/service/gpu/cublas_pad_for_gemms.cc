@@ -126,10 +126,8 @@ bool CheckCanonical(HloDotInstruction* dot) {
           dot->operand(0)->shape().rank() ||
       dimension_numbers.rhs_batch_dimensions_size() + 2 !=
           dot->operand(1)->shape().rank()) {
-    VLOG(2)
-        << dot->ToString()
-        << " is not canonical: Expected all dimensions but 2 to be "
-           "batch_dimensions. Hence, this dot is not a candidate for padding.";
+    LOG(ERROR) << "Dot is not canonical: Expected all dimensions but 2 to be "
+                  "batch_dimensions.";
     return false;
   }
 
@@ -140,11 +138,8 @@ bool CheckCanonical(HloDotInstruction* dot) {
                      canonical_batch_dims) ||
       !absl::c_equal(dimension_numbers.rhs_batch_dimensions(),
                      canonical_batch_dims)) {
-    VLOG(2)
-        << dot->ToString()
-        << " is not canonical: Expected batch dimensions to be all "
-           "dimensions except for the last 2 ones. Hence, this dot is not a "
-           "candidate for padding.";
+    LOG(ERROR) << "Dot is not canonical: Expected batch dimensions to be all "
+                  "dimensions except for the last 2 ones.";
     return false;
   }
 

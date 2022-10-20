@@ -19,6 +19,7 @@ import unittest
 
 from absl.testing import parameterized
 import numpy as np
+import six
 
 from tensorflow.python import tf2
 from tensorflow.python.checkpoint import checkpoint as trackable
@@ -1862,7 +1863,7 @@ class DenseHashTableOpTest(test.TestCase):
       self.assertAllEqual(32, len(table.export()[0].eval()))
 
       val = save.save(sess, save_path)
-      self.assertIsInstance(val, str)
+      self.assertIsInstance(val, six.string_types)
       self.assertEqual(save_path, val)
 
     with self.session(graph=ops.Graph()) as sess:
@@ -1931,7 +1932,7 @@ class DenseHashTableOpTest(test.TestCase):
       self.assertAllEqual(32, len(table.export()[0].eval()))
 
       val = save.save(sess, save_path)
-      self.assertIsInstance(val, str)
+      self.assertIsInstance(val, six.string_types)
       self.assertEqual(save_path, val)
 
     with self.session(graph=ops.Graph()) as sess:
@@ -2122,7 +2123,7 @@ class DenseHashTableOpTest(test.TestCase):
       self.assertAllEqual(32, len(table.export()[0].eval()))
 
       val = save.save(sess, save_path)
-      self.assertIsInstance(val, str)
+      self.assertIsInstance(val, six.string_types)
       self.assertEqual(save_path, val)
 
     with self.session(graph=ops.Graph()) as sess:
@@ -2197,7 +2198,7 @@ class DenseHashTableOpTest(test.TestCase):
       self.assertAllEqual(32, len(table.export()[0].eval()))
 
       val = save.save(sess, save_path)
-      self.assertIsInstance(val, str)
+      self.assertIsInstance(val, six.string_types)
       self.assertEqual(save_path, val)
 
     with self.session(graph=ops.Graph()) as sess:
@@ -3414,7 +3415,7 @@ class MutableHashTableOpTest(test.TestCase):
       self.assertAllEqual(3, self.evaluate(table.size()))
 
       val = save.save(sess, save_path)
-      self.assertIsInstance(val, str)
+      self.assertIsInstance(val, six.string_types)
       self.assertEqual(save_path, val)
 
     with self.session(graph=ops.Graph()) as sess:
@@ -3483,7 +3484,7 @@ class MutableHashTableOpTest(test.TestCase):
       self.assertAllEqual(3, self.evaluate(table.size()))
 
       val = save.save(sess, save_path)
-      self.assertIsInstance(val, str)
+      self.assertIsInstance(val, six.string_types)
       self.assertEqual(save_path, val)
 
     with self.session(graph=ops.Graph()) as sess:

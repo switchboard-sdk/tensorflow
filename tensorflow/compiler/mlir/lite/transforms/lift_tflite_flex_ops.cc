@@ -146,14 +146,16 @@ class LiftFlexCustomOp : public OpRewritePattern<TFL::CustomOp> {
             const tensorflow::protobuf::RepeatedPtrField<
                 tensorflow::OpDef::ArgDef>& args,
             llvm::StringRef attr_name) {
-          std::vector<int32_t> values;
+          std::vector<mlir::Attribute> values;
           values.reserve(args.size());
           for (const auto& arg : args) {
             auto range = arg_ranges.at(arg.name());
             values.push_back(
-                range.second - range.first);
+                rewriter.getI32IntegerAttr(range.second - range.first));
           }
-          auto attr_value = mlir::DenseI32ArrayAttr::get(tf_op->getContext(), values);
+          auto attr_type =
+              mlir::VectorType::get(args.size(), rewriter.getIntegerType(32));
+          auto attr_value = mlir::DenseElementsAttr::get(attr_type, values);
           tf_op->setAttr(attr_name, attr_value);
         };
     if (tf_op->hasTrait<mlir::OpTrait::AttrSizedOperandSegments>() ||

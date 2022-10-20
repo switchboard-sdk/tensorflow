@@ -69,7 +69,7 @@ EagerContext& GlobalEagerContext() {
         /*rendezvous=*/nullptr,
         /*cluster_flr=*/nullptr,
         /*collective_executor_mgr=*/nullptr,
-        /*run_eager_op_as_function=*/true);
+        /*run_eager_op_as_function=*/false);
   }();
   return *global_ctx;
 }

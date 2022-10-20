@@ -16,6 +16,14 @@ limitations under the License.
 #ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_
 #define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_
 
-#include "tensorflow/compiler/xla/stream_executor/cuda/cuda_event.h"
+#include "tensorflow/stream_executor/gpu/gpu_event.h"
+
+namespace stream_executor {
+namespace cuda {
+
+using CUDAEvent = gpu::GpuEvent;
+
+}  // namespace cuda
+}  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_

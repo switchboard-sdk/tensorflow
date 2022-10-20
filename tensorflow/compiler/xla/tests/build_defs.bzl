@@ -3,7 +3,7 @@
 load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 load("//tensorflow/compiler/xla/tests:plugin.bzl", "plugins")
 load(
-    "//tensorflow/compiler/xla/stream_executor:build_defs.bzl",
+    "//tensorflow/stream_executor:build_defs.bzl",
     "if_gpu_is_configured",
 )
 load(

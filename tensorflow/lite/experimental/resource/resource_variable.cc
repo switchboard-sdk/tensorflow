@@ -54,7 +54,6 @@ TfLiteStatus ResourceVariable::AssignFrom(const TfLiteTensor* tensor) {
 
   // Copy primitive parameters.
   memset(&tensor_, 0, sizeof(tensor_));
-  tensor_.name = "ResourceVariable";
   tensor_.allocation_type = kTfLiteDynamic;
   tensor_.type = tensor->type;
   tensor_.params = tensor->params;

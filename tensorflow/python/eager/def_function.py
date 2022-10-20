@@ -65,17 +65,17 @@ import os
 import threading
 import types as types_lib
 import weakref
+import six
 
 from google.protobuf import text_format as _text_format
 from google.protobuf.message import DecodeError
 from tensorflow.core.framework import attr_value_pb2
 from tensorflow.python.distribute.parallel_device import parallel_device
 from tensorflow.python.eager import context
+from tensorflow.python.eager import function as function_lib
 from tensorflow.python.eager import function_spec as function_spec_lib
 from tensorflow.python.eager import lift_to_graph
 from tensorflow.python.eager import monitoring
-from tensorflow.python.eager.polymorphic_function import monomorphic_function
-from tensorflow.python.eager.polymorphic_function import polymorphic_function
 from tensorflow.python.framework import composite_tensor
 from tensorflow.python.framework import errors
 from tensorflow.python.framework import func_graph as func_graph_module
@@ -310,7 +310,7 @@ class UnliftedInitializerVariable(resource_variable_ops.UninitializedVariable):
 
     # Use the constructor for UninitializedVariable to start. Outside the name
     # scope so we don't double up the prefix.
-    super().__init__(
+    super(UnliftedInitializerVariable, self).__init__(
         trainable=trainable,
         caching_device=caching_device,
         name=name,
@@ -508,8 +508,7 @@ def _evaluate_var_is_initialized(variables):
   return var_is_initialized
 
 
-class FunctionDeleter:
-  """An object responsible for cleaning up the function graph."""
+class FunctionDeleter(object):
 
   __slots__ = ["func_graph"]
 
@@ -524,7 +523,7 @@ class FunctionDeleter:
       pass
 
 
-class OptionalXlaContext:
+class OptionalXlaContext(object):
   """Wrapper for XLA context optionally applied under a context manager."""
 
   def __init__(self, is_compiled):
@@ -603,6 +602,7 @@ class Function(core.GenericFunction, trackable.Trackable):
     self._stateless_fn = None  # GUARDED_BY(self._lock)
     self._descriptor_cache = weakref.WeakKeyDictionary()
     self._name = name
+    self._input_signature = input_signature
     self._key_for_call_stats = self._get_key_for_call_stats()
     self._omit_frequent_tracing_warning = False
     ops._tf_function_api_guage.get_cell().set(True)  # pylint: disable=protected-access
@@ -695,14 +695,14 @@ class Function(core.GenericFunction, trackable.Trackable):
       # 'name' field of the NameAttrList. Else, it is just a string
       # corresponding to the function name.
       try:
+        implements_attr = six.ensure_text(self._implements, "utf-8")
         attr_value = attr_value_pb2.AttrValue()
         nameattrlist = attr_value_pb2.NameAttrList()
-        _text_format.Merge(self._implements, nameattrlist)
+        _text_format.Merge(implements_attr, nameattrlist)
         attr_value.func.CopyFrom(nameattrlist)
-        attributes[monomorphic_function.IMPLEMENTS_ATTRIBUTE_NAME] = attr_value
+        attributes[function_lib.IMPLEMENTS_ATTRIBUTE_NAME] = attr_value
       except (_text_format.ParseError, DecodeError):
-        attributes[
-            monomorphic_function.IMPLEMENTS_ATTRIBUTE_NAME] = self._implements
+        attributes[function_lib.IMPLEMENTS_ATTRIBUTE_NAME] = self._implements
     return attributes
 
   def _defun(self, fn):
@@ -714,7 +714,7 @@ class Function(core.GenericFunction, trackable.Trackable):
 
     share = self._shared_rendezvous
     if share is not None:
-      attributes[monomorphic_function.SHARED_RENDEZVOUS_ATTRIBUTE_NAME] = share
+      attributes[function_lib.SHARED_RENDEZVOUS_ATTRIBUTE_NAME] = share
 
     if self._jit_compile is not None:
       attributes.update(_XlaMustCompile=bool(self._jit_compile))
@@ -722,7 +722,7 @@ class Function(core.GenericFunction, trackable.Trackable):
         attributes.update(_noinline=True)
     if not attributes:
       attributes = None
-    return polymorphic_function.defun_with_attributes(
+    return function_lib.defun_with_attributes(
         fn,
         input_signature=self.input_signature,
         attributes=attributes,
@@ -746,7 +746,23 @@ class Function(core.GenericFunction, trackable.Trackable):
       kwds: Keyword arguments to the python callable.
       add_initializers_to: Where to collect variable initializers, if not None.
     """
-    self.function_spec.validate_input_signature_with_argspec()
+
+    if self._input_signature is not None:
+      arglen = len(self._input_signature)
+      arg_names_len = len(self.function_spec.arg_names)
+      default_arg_len = len(self.function_spec.fullargspec.defaults or ())
+      required_arg_len = arg_names_len - default_arg_len
+      # The input signature must cover all required function arguments.
+      if arglen < required_arg_len:
+        missing_tensor_specs = self.function_spec.arg_names[
+            arglen:required_arg_len]
+        raise TypeError(
+            f"The decorated function {self._name} has {required_arg_len} "
+            f"required argument(s), but tf.function was only passed an "
+            f"input_signature of length {arglen}. This covers {arglen} "
+            f"required argument(s): {self.function_spec.arg_names[:arglen]}, "
+            f"but TensorSpecs are still required for the remaining "
+            f"{len(missing_tensor_specs)} argument(s): {missing_tensor_specs}.")
 
     created_variables = []
     lifted_initializer_graph = func_graph_module.FuncGraph("initializer")
@@ -787,7 +803,7 @@ class Function(core.GenericFunction, trackable.Trackable):
         python_function=(self._python_function
                          if python_function is None else python_function),
         name=self._name,
-        input_signature=self.input_signature,
+        input_signature=self._input_signature,
         autograph=self._autograph,
         jit_compile=self._jit_compile,
         reduce_retracing=self._reduce_retracing,
@@ -965,7 +981,7 @@ class Function(core.GenericFunction, trackable.Trackable):
     else:
       _, _, filtered_flat_args = (
           self._stateful_fn._function_spec.canonicalize_function_inputs(  # pylint: disable=protected-access
-              args, kwds))
+              *args, **kwds))
       # If we did not create any variables the trace we have is good enough.
       return self._concrete_stateful_fn._call_flat(
           filtered_flat_args, self._concrete_stateful_fn.captured_inputs)  # pylint: disable=protected-access
@@ -991,9 +1007,9 @@ class Function(core.GenericFunction, trackable.Trackable):
     # so we fall back to initializing with conds while running the function.
     canon_args, canon_kwds, filtered_flat_args = (
         self._stateful_fn._function_spec.canonicalize_function_inputs(  # pylint: disable=protected-access
-            args, kwds))
-    return polymorphic_function.defun(fn_with_cond)(canon_args, canon_kwds,
-                                                    filtered_flat_args)
+            *args, **kwds))
+    return function_lib.defun(fn_with_cond)(canon_args, canon_kwds,
+                                            filtered_flat_args)
 
   def experimental_get_compiler_ir(self, *args, **kwargs):
     # Implements GenericFunction.experimental_get_compiler_ir
@@ -1007,7 +1023,8 @@ class Function(core.GenericFunction, trackable.Trackable):
 
     # pylint: disable=protected-access
     _, _, filtered_flat_args = (
-        concrete_fn._function_spec.canonicalize_function_inputs(args, kwargs))
+        concrete_fn._function_spec.canonicalize_function_inputs(
+            *args, **kwargs))
 
     def compiler_ir_generator(stage="hlo", device_name=None):
       # TODO(cheshire): This is a hack to get the current "preferred" device,
@@ -1059,7 +1076,7 @@ class Function(core.GenericFunction, trackable.Trackable):
     # Note: using defun here avoids an infinite recursion.
     # Most of the code in this function runs eagerly with init_scope, where
     # autograph is not necessary.
-    @polymorphic_function.defun(autograph=False)
+    @function_lib.defun(autograph=False)
     def initialize_variables():
       op_map = object_identity.ObjectIdentityDictionary()
 
@@ -1115,7 +1132,7 @@ class Function(core.GenericFunction, trackable.Trackable):
       self._initialize(args, kwargs, add_initializers_to=initializers)
 
     # Note: using defun here avoids an infinite recursion.
-    @polymorphic_function.defun
+    @function_lib.defun
     def initialize_variables():
       for v, init in initializers:
         v.assign(
@@ -1156,7 +1173,7 @@ class Function(core.GenericFunction, trackable.Trackable):
         logging.info("Unsupported signature for serialization: %s.", signature)
         continue
       equal_to_signature = functools.partial(
-          function_spec_lib.is_same_structure, signature, check_values=True)
+          function_lib.is_same_structure, signature, check_values=True)
       if not any(equal_to_signature(s) for s in seen_signatures):
         seen_signatures.append(signature)
 
@@ -1229,7 +1246,7 @@ class Function(core.GenericFunction, trackable.Trackable):
     # `instance` here is the instance that this `Function` was accessed through
     # e.g., for
     #
-    #   class Foo:
+    #   class Foo(object):
     #
     #     @function.defun
     #     def bar(self):
@@ -1261,7 +1278,7 @@ class Function(core.GenericFunction, trackable.Trackable):
       # It's unclear whether we need the tf-decorator, or could just call
       # MethodType(self.clone(), instance)
       self._descriptor_cache[instance] = (
-          polymorphic_function.class_method_to_instance_method(self, instance))
+          function_lib.class_method_to_instance_method(self, instance))
     return self._descriptor_cache[instance]
 
 
@@ -1623,6 +1640,10 @@ def function(func=None,
      `ValueError` when attempting to use `jit_compile=True`, but XLA support is
      not available.
   """
+  if func is not None:
+    function_lib.validate_python_function(func)
+  if input_signature is not None:
+    function_lib.validate_signature(input_signature)
   if experimental_follow_type_hints is None:
     experimental_follow_type_hints = False
 

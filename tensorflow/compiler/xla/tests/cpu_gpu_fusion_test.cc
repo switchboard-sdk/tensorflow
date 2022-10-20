@@ -825,15 +825,16 @@ XLA_TEST_F(FusionClientLibraryTest, ManyLayoutTransformations) {
 void BM_ParallelFusion(::testing::benchmark::State& state) {
   // Simple element-wise computation to benchmark parallel task partitioning.
 
-  se::Platform* platform = PlatformUtil::GetDefaultPlatform().value();
-  auto executors = PlatformUtil::GetStreamExecutors(platform).value();
+  se::Platform* platform = PlatformUtil::GetDefaultPlatform().ValueOrDie();
+  auto executors = PlatformUtil::GetStreamExecutors(platform).ValueOrDie();
   se::StreamExecutorMemoryAllocator allocator(platform, executors);
 
   const int64_t intra_op_parallelism_threads = 24;
   xla::LocalClientOptions client_options;
   client_options.set_platform(platform);
   client_options.set_intra_op_parallelism_threads(intra_op_parallelism_threads);
-  auto client = ClientLibrary::GetOrCreateLocalClient(client_options).value();
+  auto client =
+      ClientLibrary::GetOrCreateLocalClient(client_options).ValueOrDie();
 
   int device_ordinal = client->default_device_ordinal();
 

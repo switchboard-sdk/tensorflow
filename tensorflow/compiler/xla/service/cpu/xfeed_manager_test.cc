@@ -45,10 +45,10 @@ class TestInfeedBuffer : public cpu::runtime::XfeedBuffer {
     CHECK(!done_called_);
     done_called_ = true;
     TF_ASSERT_OK(shape.status());
-    EXPECT_EQ(expect_shape_match_, ShapeUtil::Equal(shape_, shape.value()))
+    EXPECT_EQ(expect_shape_match_, ShapeUtil::Equal(shape_, shape.ValueOrDie()))
         << "want " << ShapeUtil::HumanString(shape_) << " "
         << (expect_shape_match_ ? "==" : "!=") << " "
-        << ShapeUtil::HumanString(shape.value());
+        << ShapeUtil::HumanString(shape.ValueOrDie());
   }
 
   const Shape& shape() const { return shape_; }

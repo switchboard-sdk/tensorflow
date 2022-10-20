@@ -97,21 +97,8 @@ class HloTestBase : public ManifestCheckingTest {
   // Runs the hlo_pass with the provided module and returns the result. This
   // function also verifies that the module remains unchanged when hlo_pass
   // returns false as the StatusOr value.
-  //
-  // These three overloads all do the same thing.  The && overload lets you do
-  // `RunHloPass(MyPass(), module)` all in one line.  The reason for the
-  // overload that takes a pointer is that, at one point in the past, non-const
-  // lvalue references were banned in Google code.
   static StatusOr<bool> RunHloPass(HloPassInterface* hlo_pass,
                                    HloModule* module);
-  static StatusOr<bool> RunHloPass(HloPassInterface& hlo_pass,
-                                   HloModule* module) {
-    return RunHloPass(&hlo_pass, module);
-  }
-  static StatusOr<bool> RunHloPass(HloPassInterface&& hlo_pass,
-                                   HloModule* module) {
-    return RunHloPass(&hlo_pass, module);
-  }
 
   static PrecisionConfig DefaultPrecisionConfig(int operands);
 
@@ -257,20 +244,19 @@ class HloTestBase : public ManifestCheckingTest {
   ::testing::AssertionResult RunAndCompareTwoModules(
       std::unique_ptr<HloModule> module_0, std::unique_ptr<HloModule> module_1,
       const absl::Span<Literal* const> arguments,
-      const std::optional<ErrorSpec>& error, bool run_hlo_passes = true);
+      const std::optional<ErrorSpec>& error);
 
   // Same as below, except requires passing the modules.
   ::testing::AssertionResult RunAndCompareTwoModules(
       std::unique_ptr<HloModule> module_0, std::unique_ptr<HloModule> module_1,
-      const std::optional<ErrorSpec>& error, bool run_hlo_passes = true);
+      const std::optional<ErrorSpec>& error);
 
-  // Convenient wrapper for executing and comparing results of two hlo modules
-  // with fake input. By default compares unoptimized modules. If the modules
-  // are already optimized, set |run_hlo_passes| to false.
+  // Convenient wrapper for executing and comparing results of two unoptimized
+  // hlo modules with fake input.
   ::testing::AssertionResult RunAndCompareTwoModules(
       absl::string_view hlo_string_module_0,
       absl::string_view hlo_string_module_1,
-      const std::optional<ErrorSpec>& error, bool run_hlo_passes = true);
+      const std::optional<ErrorSpec>& error);
 
   // Executes an hlo module with fake inputs on multiple replicas.
   [[nodiscard]] ::testing::AssertionResult RunReplicated(

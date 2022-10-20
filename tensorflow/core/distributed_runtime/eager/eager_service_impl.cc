@@ -23,7 +23,6 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/fixed_array.h"
-#include "absl/strings/str_cat.h"
 #include "absl/types/optional.h"
 #include "tensorflow/c/eager/immediate_execution_distributed_manager.h"
 #include "tensorflow/core/common_runtime/device_mgr.h"
@@ -35,7 +34,6 @@ limitations under the License.
 #include "tensorflow/core/distributed_runtime/eager/remote_mgr.h"
 #include "tensorflow/core/distributed_runtime/eager/remote_tensor_handle.h"
 #include "tensorflow/core/distributed_runtime/message_wrappers.h"
-#include "tensorflow/core/distributed_runtime/preemption/preemption_notifier.h"
 #include "tensorflow/core/distributed_runtime/session_mgr.h"
 #include "tensorflow/core/distributed_runtime/worker_cache.h"
 #include "tensorflow/core/distributed_runtime/worker_env.h"
@@ -318,24 +316,8 @@ Status EagerServiceImpl::CreateContext(const CreateContextRequest* request,
       !config.experimental().coordination_config().service_type().empty();
   if (enable_coordination) {
     auto dist_mgr = std::make_unique<EagerContextDistributedManager>(ctx);
-    auto coord_agent = env_->session_mgr->GetCoordinationServiceAgent();
-    dist_mgr->SetCoordinationServiceAgent(coord_agent);
-    auto preemption_notifier =
-        PreemptionNotifier::CreatePreemptionNotifier("sigterm", Env::Default());
-    preemption_notifier->WillBePreemptedAtAsync(
-        [coord_agent](StatusOr<absl::Time> time_or_status) {
-          if (time_or_status.ok()) {
-            const auto& coord_task = coord_agent->GetOwnTask().value();
-            Status s = coord_agent->InsertKeyValue(
-                "TF_DEFAULT_PREEMPTION_NOTICE_KEY",
-                absl::StrCat("/job:", coord_task.job_name(),
-                             "/task:", coord_task.task_id()));
-            if (!s.ok()) {
-              LOG(INFO) << "Preemption not exported to coordination service: "
-                        << s;
-            }
-          }
-        });
+    dist_mgr->SetCoordinationServiceAgent(
+        env_->session_mgr->GetCoordinationServiceAgent());
     ctx->SetDistributedManager(std::move(dist_mgr));
   }
 #endif  // !IS_MOBILE_PLATFORM

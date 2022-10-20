@@ -21,9 +21,6 @@ limitations under the License.
 #include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
 #include "tensorflow/compiler/tf2xla/xla_op_registry.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
-#include "tensorflow/compiler/xla/stream_executor/tpu/c_api_conversions.h"
-#include "tensorflow/compiler/xla/stream_executor/tpu/c_api_decl.h"
-#include "tensorflow/compiler/xla/stream_executor/tpu/status_helper.h"
 #include "tensorflow/core/framework/kernel_def_builder.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/op_requires.h"
@@ -31,6 +28,9 @@ limitations under the License.
 #include "tensorflow/core/tpu/kernels/tpu_mesh_state_interface.h"
 #include "tensorflow/core/tpu/tpu_api.h"
 #include "tensorflow/core/tpu/tpu_configuration.h"
+#include "tensorflow/stream_executor/tpu/c_api_conversions.h"
+#include "tensorflow/stream_executor/tpu/c_api_decl.h"
+#include "tensorflow/stream_executor/tpu/status_helper.h"
 
 namespace tensorflow {
 
@@ -225,7 +225,7 @@ class SendTPUEmbeddingGradientsOp : public XlaOpKernel {
     auto builder = ctx->builder();
     gradient_shapes.reserve(gradients.size());
     for (xla::XlaOp op : gradients) {
-      gradient_shapes.push_back(builder->GetShape(op).value());
+      gradient_shapes.push_back(builder->GetShape(op).ValueOrDie());
     }
 
     std::vector<xla::XlaOp> learning_rates;
@@ -235,7 +235,7 @@ class SendTPUEmbeddingGradientsOp : public XlaOpKernel {
     std::vector<xla::Shape> learning_rate_shapes;
     learning_rate_shapes.reserve(learning_rates.size());
     for (xla::XlaOp op : learning_rates) {
-      learning_rate_shapes.push_back(builder->GetShape(op).value());
+      learning_rate_shapes.push_back(builder->GetShape(op).ValueOrDie());
     }
 
     xla::XlaOp deduplication_data = ctx->Input("deduplication_data");

@@ -17,11 +17,6 @@ limitations under the License.
 
 #include <limits>
 #include <list>
-#include <set>
-#include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
 
 #include "tensorflow/compiler/xla/test.h"
 #include "tensorflow/compiler/xla/types.h"

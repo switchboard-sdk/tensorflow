@@ -28,7 +28,7 @@ cc_library(
     deps = [
         ":FuncToGraph",
         "//tensorflow/core/ir:Dialect",
-        "//tensorflow/core/transforms:PassIncGen",
+        "//tensorflow/core/transforms:PassDetail",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
     ],

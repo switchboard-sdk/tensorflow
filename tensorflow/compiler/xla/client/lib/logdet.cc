@@ -67,7 +67,7 @@ SignAndLogDet SLogDet(XlaOp a) {
     XlaOp error = a.builder()->ReportError(result.status());
     return SignAndLogDet{error, error};
   }
-  return result.value();
+  return result.ValueOrDie();
 }
 
 XlaOp LogDet(XlaOp a) {

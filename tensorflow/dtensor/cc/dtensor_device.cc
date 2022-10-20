@@ -41,9 +41,6 @@ limitations under the License.
 #include "tensorflow/c/tf_status_helper.h"
 #include "tensorflow/c/tf_tensor_internal.h"
 #include "tensorflow/compiler/xla/status_macros.h"
-#include "tensorflow/compiler/xla/stream_executor/tpu/c_api_decl.h"
-#include "tensorflow/compiler/xla/stream_executor/tpu/tpu_platform_interface.h"
-#include "tensorflow/compiler/xla/stream_executor/tpu/tpu_topology.h"
 #include "tensorflow/core/common_runtime/device_set.h"
 #include "tensorflow/core/common_runtime/eager/context.h"
 #include "tensorflow/core/common_runtime/eager/tensor_handle.h"
@@ -73,6 +70,9 @@ limitations under the License.
 #include "tensorflow/dtensor/cc/tensor_layout.h"
 #include "tensorflow/dtensor/cc/tpu_system_interface.h"
 #include "tensorflow/dtensor/proto/layout.pb.h"
+#include "tensorflow/stream_executor/tpu/c_api_decl.h"
+#include "tensorflow/stream_executor/tpu/tpu_platform_interface.h"
+#include "tensorflow/stream_executor/tpu/tpu_topology.h"
 
 namespace tensorflow {
 namespace dtensor {
@@ -902,7 +902,7 @@ TFE_TensorHandle* DTensorDevice::Pack(TFE_Context* context, int num_inputs,
     packed_tensor =
         TensorWithLayout::Wrap(std::move(parallel_tensor),
                                *target_parallel_device, *target_layout)
-            .value();
+            .ValueOrDie();
   }
 
   RecordInShapeLayoutCache(*packed_tensor);
@@ -991,7 +991,7 @@ TFE_TensorHandle* DTensorDevice::SparsePack(
   if (is_remote_mesh(target_parallel_device->mesh_config())) {
     // Create a dummy SparseTensorWithLayout.
     packed_tensor = SparseTensorWithLayout::Dummy(
-        local_shape, *target_parallel_device, target_layout.value());
+        local_shape, *target_parallel_device, target_layout.ValueOrDie());
   } else {
     // Parse the indices, values, and dense_shape tensors and put them into
     // parallel tensors, and then pack it into a single SparseTensorWithLayout.
@@ -1047,8 +1047,8 @@ TFE_TensorHandle* DTensorDevice::SparsePack(
                                      std::move(parallel_values_tensor),
                                      std::move(parallel_dense_shapes_tensor),
                                      *target_parallel_device,
-                                     target_layout.value(), local_shape)
-            .value();
+                                     target_layout.ValueOrDie(), local_shape)
+            .ValueOrDie();
   }
 
   RecordInShapeLayoutCache(*packed_tensor);
@@ -2029,7 +2029,7 @@ void AddMesh(const std::string& serialized_mesh, void* device_info,
                      .c_str());
     return;
   }
-  auto mesh_config = mesh_config_or_status.value();
+  auto mesh_config = mesh_config_or_status.ValueOrDie();
   std::vector<std::string> underlying_devices;
   underlying_devices.insert(underlying_devices.end(),
                             mesh_config.local_devices().begin(),
@@ -2059,7 +2059,7 @@ void ExperimentalSetDefaultLayout(const std::string& serialized_layout,
     RETURN_STATUS(status, TF_INTERNAL, layout.status().error_message().c_str());
   }
   DTensorDevice* device = reinterpret_cast<DTensorDevice*>(device_info);
-  device->SetDefaultLayout(layout.value());
+  device->SetDefaultLayout(layout.ValueOrDie());
 }
 
 void ExperimentalClearDefaultLayout(void* device_info, TF_Status* status) {
@@ -2074,7 +2074,7 @@ void ExperimentalSetDefaultMesh(const std::string& serialized_mesh,
     RETURN_STATUS(status, TF_INTERNAL, mesh.status().error_message().c_str());
   }
   DTensorDevice* device = reinterpret_cast<DTensorDevice*>(device_info);
-  device->SetDefaultMesh(mesh.value());
+  device->SetDefaultMesh(mesh.ValueOrDie());
 }
 
 void ExperimentalClearDefaultMesh(void* device_info, TF_Status* status) {

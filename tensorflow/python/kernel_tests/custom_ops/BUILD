@@ -3,7 +3,10 @@
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_library")
 load("//tensorflow:tensorflow.bzl", "tf_py_test")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//tensorflow:internal"],
+    licenses = ["notice"],
+)
 
 # Custom op tests
 tf_custom_op_library(

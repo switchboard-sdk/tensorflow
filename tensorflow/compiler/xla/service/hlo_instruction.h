@@ -1093,7 +1093,7 @@ class HloInstruction {
   static std::unique_ptr<HloInstruction> CreateFusion(
       const Shape& shape, FusionKind fusion_kind,
       absl::Span<HloInstruction* const> operands,
-      HloComputation* fusion_computation, absl::string_view prefix = "");
+      HloComputation* fusion_computation);
 
   // Creates a call instruction that applies the given computation on the given
   // operands. "shape" is the resultant shape.
@@ -1171,12 +1171,6 @@ class HloInstruction {
 
   static std::unique_ptr<HloInstruction> CreateAddDependency(
       HloInstruction* data_operand, HloInstruction* token_operand);
-
-  // Returns true if `execution_thread` is included in the
-  // `execution_threads_set`.
-  static bool IsThreadIncluded(
-      absl::string_view execution_thread,
-      const absl::flat_hash_set<absl::string_view>& execution_threads_set);
 
   // Returns the opcode for this instruction.
   HloOpcode opcode() const { return opcode_; }
@@ -2166,10 +2160,6 @@ class HloInstruction {
 
   // Delegates to HloCholeskyInstruction::cholesky_options().
   const CholeskyOptions& cholesky_options() const;
-
-  // Delegates to HloCustomCallInstruction::output_to_operand_aliasing().
-  const std::vector<std::pair<ShapeIndex, std::pair<int64_t, ShapeIndex>>>&
-  custom_call_output_operand_aliasing() const;
 
   // Appends operand to the list of operands and adds this instruction as a user
   // of the operand.

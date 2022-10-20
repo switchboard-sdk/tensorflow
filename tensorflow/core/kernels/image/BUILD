@@ -31,7 +31,6 @@ package_group(
     packages = [
         "//tensorflow/...",
         "//tensorflow_text/...",
-        "//waymo/onboard/ml/...",
     ],
 )
 

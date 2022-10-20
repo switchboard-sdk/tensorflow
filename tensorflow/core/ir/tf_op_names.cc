@@ -25,8 +25,7 @@ bool TFGraphDialect::IsAdd(TFOp op) const {
   StringAttr op_name = op->getName().getIdentifier();
 
   if (op_name == add_v2_) return true;
-  if (op_name == add_)
-    return !op->getAttrOfType<TypeAttr>("T").getValue().isa<StringType>();
+  if (op_name == add_) return !op->getAttrOfType<StringAttr>("T");
   return false;
 }
 
@@ -719,11 +718,6 @@ bool TFGraphDialect::IsRestore(TFOp op) const {
   StringAttr op_name = op->getName().getIdentifier();
   return op_name == restore_ || op_name == restore_v2_ ||
          op_name == restore_slice_;
-}
-
-bool TFGraphDialect::IsReturn(TFOp op) const {
-  StringAttr op_name = op->getName().getIdentifier();
-  return op_name == return_;
 }
 
 bool TFGraphDialect::IsRetval(TFOp op) const {

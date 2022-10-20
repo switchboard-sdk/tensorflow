@@ -35,11 +35,11 @@ namespace kernel_gen {
 namespace transforms {
 namespace {
 
-#define GEN_PASS_DEF_SHAPETODESCRIPTORSPASS
+#define GEN_PASS_CLASSES
 #include "tensorflow/compiler/mlir/tools/kernel_gen/transforms/kernel_gen_passes.h.inc"
 
 struct ShapeToDescriptorsPass
-    : public impl::ShapeToDescriptorsPassBase<ShapeToDescriptorsPass> {
+    : public ShapeToDescriptorsPassBase<ShapeToDescriptorsPass> {
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<scf::SCFDialect>();
   }

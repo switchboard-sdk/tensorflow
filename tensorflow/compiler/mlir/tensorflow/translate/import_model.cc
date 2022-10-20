@@ -90,7 +90,6 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tensorflow/utils/mangling_util.h"
 #include "tensorflow/compiler/mlir/tensorflow/utils/translate_utils.h"
 #include "tensorflow/compiler/xla/status_macros.h"
-#include "tensorflow/compiler/xla/stream_executor/lib/statusor.h"
 #include "tensorflow/core/common_runtime/function.h"
 #include "tensorflow/core/common_runtime/graph_constructor.h"
 #include "tensorflow/core/common_runtime/shape_refiner.h"
@@ -130,6 +129,7 @@ limitations under the License.
 #include "tensorflow/core/protobuf/trackable_object_graph.pb.h"
 #include "tensorflow/core/util/device_name_utils.h"
 #include "tensorflow/core/util/dump_graph.h"
+#include "tensorflow/stream_executor/lib/statusor.h"
 
 static inline absl::string_view StringRefToView(llvm::StringRef ref) {
   return {ref.data(), ref.size()};
@@ -909,7 +909,7 @@ Status ImporterBase::AddNodesToShapeRefiner(
         return OkStatus();
       }
 
-      for (const auto& shape : llvm::enumerate(list.shape())) {
+      for (auto shape : llvm::enumerate(list.shape())) {
         auto* node_context = shape_refiner_->GetContext(node);
         shape_inference::ShapeHandle handle;
         Status status =
@@ -1927,14 +1927,16 @@ mlir::Operation* ImporterBase::CreateOperation(
       [&](const NameRangeMap& arg_ranges,
           const protobuf::RepeatedPtrField<OpDef::ArgDef>& args,
           llvm::StringRef attr_name) {
-        std::vector<int32_t> values;
+        std::vector<mlir::Attribute> values;
         values.reserve(args.size());
         for (const auto& arg : args) {
           auto range = arg_ranges.at(arg.name());
           values.push_back(
-              range.second - range.first);
+              island_builder.getI32IntegerAttr(range.second - range.first));
         }
-        auto attr_value = mlir::DenseI32ArrayAttr::get(inner_op->getContext(), values);
+        auto attr_type =
+            mlir::VectorType::get(args.size(), builder_.getIntegerType(32));
+        auto attr_value = mlir::DenseElementsAttr::get(attr_type, values);
         inner_op->setAttr(attr_name, attr_value);
       };
 
@@ -3489,7 +3491,7 @@ Status CreateSavedModelIR(
           builder.getUnknownLoc(),
           builder.getStringAttr(object_names.GetSymbolTableName(node_id)),
           value_attr,
-          /*type=*/mlir::TypeAttr::get(value_attr.getType()),
+          /*type=*/mlir::TypeAttr::get(value_attr.Attribute::getType()),
           /*is_mutable=*/nullptr);
       op->setAttr(
           "tf_saved_model.exported_names",

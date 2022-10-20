@@ -48,12 +48,12 @@ limitations under the License.
 #include "tensorflow/compiler/xla/shape.h"
 #include "tensorflow/compiler/xla/status.h"
 #include "tensorflow/compiler/xla/statusor.h"
-#include "tensorflow/compiler/xla/stream_executor/stream.h"
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/casts.h"
+#include "tensorflow/stream_executor/stream.h"
 
 namespace xla {
 
@@ -74,10 +74,9 @@ class PjRtStreamExecutorDevice : public PjRtDevice {
   void SetClient(PjRtClient* client) {
     CHECK(client_ == nullptr);
     client_ = client;
-    // We have to define debug_string_ and to_string_ here, because
-    // platform_name() requires client_ to be set.
+    // We have to define debug_string_ here, because platform_name() requires
+    // client_ to be set.
     debug_string_ = absl::StrCat(platform_name(), ":", id());
-    to_string_ = absl::StrCat(platform_name(), "(id=", id(), ")");
   }
 
   int process_index() const override { return process_index_; }
@@ -110,7 +109,7 @@ class PjRtStreamExecutorDevice : public PjRtDevice {
 
   absl::string_view device_kind() const override { return device_kind_; }
 
-  absl::string_view ToString() const override;
+  std::string ToString() const override;
 
   absl::string_view DebugString() const override;
 
@@ -138,7 +137,6 @@ class PjRtStreamExecutorDevice : public PjRtDevice {
   const int process_index_;
   const std::string device_kind_;
   std::string debug_string_;
-  std::string to_string_;
   PjRtClient* client_ = nullptr;
 };
 
@@ -271,7 +269,7 @@ class PjRtStreamExecutorClient : public PjRtClient {
 
   LocalDeviceState& device_state(int device_ordinal) const {
     return *tensorflow::down_cast<PjRtStreamExecutorDevice*>(
-                LookupAddressableDevice(device_ordinal).value())
+                LookupAddressableDevice(device_ordinal).ValueOrDie())
                 ->local_device_state();
   }
   LocalClient* client() const { return client_; }
@@ -780,8 +778,6 @@ class PjRtStreamExecutorExecutable : public PjRtLoadedExecutable {
   void Delete() override { executables_.clear(); }
 
   bool IsDeleted() override { return executables_.empty(); }
-
-  bool IsReturnedFutureSupported() const override { return true; }
 
   absl::Span<const std::shared_ptr<LocalExecutable>> executables() const {
     return executables_;

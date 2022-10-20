@@ -16,6 +16,15 @@ limitations under the License.
 #ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_RNG_H_
 #define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_RNG_H_
 
-#include "tensorflow/compiler/xla/stream_executor/cuda/cuda_rng.h"
+#include "tensorflow/stream_executor/gpu/gpu_rng.h"
+
+namespace stream_executor {
+
+namespace cuda {
+
+using CUDARng = gpu::GpuRng;
+
+}  // namespace cuda
+}  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_RNG_H_

@@ -1,4 +1,7 @@
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//tensorflow:internal"],
+    licenses = ["notice"],
+)
 
 py_binary(
     name = "debug_fibonacci_v2",

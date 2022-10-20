@@ -46,10 +46,6 @@ class ResourceVariable : public ResourceBase {
   // Returns true if this resource variable is initialized.
   bool IsInitialized() override { return is_initialized_; }
 
-  size_t GetMemoryUsage() override {
-    return is_initialized_ ? tensor_.bytes : 0;
-  }
-
  private:
   // The tensor (and its buffer stored in `tensor_.data` is fully owned by
   // the `ResourceVariable` object.

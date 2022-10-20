@@ -16,6 +16,15 @@ limitations under the License.
 #ifndef TENSORFLOW_STREAM_EXECUTOR_LIB_PROCESS_STATE_H_
 #define TENSORFLOW_STREAM_EXECUTOR_LIB_PROCESS_STATE_H_
 
-#include "tensorflow/compiler/xla/stream_executor/lib/process_state.h"
+#include "tensorflow/stream_executor/platform/port.h"
+
+namespace stream_executor {
+namespace port {
+
+std::string Hostname();
+bool GetCurrentDirectory(std::string* dir);
+
+}  // namespace port
+}  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_LIB_PROCESS_STATE_H_

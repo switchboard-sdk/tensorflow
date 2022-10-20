@@ -133,7 +133,7 @@ def dummy_tf_decorator(method):
 class FunctionTest(test.TestCase, parameterized.TestCase):
 
   def setUp(self):
-    super().setUp()
+    super(FunctionTest, self).setUp()
     cpus = config.list_physical_devices('CPU')
     # Set 4 virtual CPUs
     config.set_logical_device_configuration(cpus[0], [
@@ -446,7 +446,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
     # instance method bounding.
     unknown_dim = [False]
 
-    class Foo:
+    class Foo(object):
 
       @def_function.function(reduce_retracing=True)
       def func(self, a):
@@ -1387,7 +1387,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
   def testGraphModeCaptureVariable(self):
     with context.graph_mode(), self.cached_session():
 
-      class HasAVar:
+      class HasAVar(object):
 
         def __init__(self):
           self.v = resource_variable_ops.ResourceVariable(1.0)
@@ -1948,7 +1948,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
 
   def testCacheObjectHashCollisions(self):
 
-    class Foo:
+    class Foo(object):
 
       def __hash__(self):
         return 42
@@ -2477,6 +2477,27 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, 'does not match'):
       defined(rt5)
 
+  def testInputSignatureWithVariableArgs(self):
+
+    def f(v):
+      v.assign_add(1)
+
+    signature = [
+        resource_variable_ops.VariableSpec(shape=[], dtype=dtypes.int32)
+    ]
+    defined = function.defun(f, input_signature=signature)
+
+    v1 = variables.Variable(0)
+    v2 = variables.Variable(0)
+
+    defined(v1)
+    self.assertEqual(v1.numpy(), 1)
+    self.assertEqual(v2.numpy(), 0)
+
+    defined(v=v2)
+    self.assertEqual(v1.numpy(), 1)
+    self.assertEqual(v2.numpy(), 1)
+
   def testInputSignatureWithKeywordOnlyArgs(self):
 
     def f(a, b, c=3, *, d=4):
@@ -2531,18 +2552,6 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
         ValueError, "keyword-only arguments must have default values.*'b'"):
       function.defun(test_func_lambda, input_signature=signature)
 
-  def testVariableSpecWithInputSignature(self):
-
-    def f(v):
-      v.assign_add(1)
-
-    signature = [
-        resource_variable_ops.VariableSpec(shape=[], dtype=dtypes.int32)
-    ]
-    with self.assertRaisesRegex(TypeError,
-                                "input_signature doesn't support VariableSpec"):
-      def_function.function(f, input_signature=signature)
-
   def testTensorKeywordArguments(self):
 
     def foo(a, b):
@@ -2587,7 +2596,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
 
     integer = constant_op.constant(2, dtypes.int64)
 
-    class Foo:
+    class Foo(object):
 
       def one(self, tensor):
         return tensor
@@ -2606,7 +2615,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
 
     integer = constant_op.constant(2, dtypes.int64)
 
-    class Foo:
+    class Foo(object):
 
       @def_function.function
       def func(self, other=integer):
@@ -3082,7 +3091,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
       self.skipTest('attr module is unavailable.')
 
     @attr.s
-    class TestClass:
+    class TestClass(object):
       a = attr.ib()
       b = attr.ib()
 
@@ -3214,7 +3223,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
 
   def testDecoratedMethodInspect(self):
 
-    class DefunnedMiniModel:
+    class DefunnedMiniModel(object):
 
       @function.defun
       def call(self, inputs, training=True):
@@ -4657,7 +4666,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
 
   def testMissingArgsTfFunctionedMethod(self):
 
-    class A:
+    class A(object):
 
       def func(self, position_arg1, position_arg2):
         return position_arg1, position_arg2
@@ -4683,7 +4692,7 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
 
   def testMissingArgsTfFunctionedObject(self):
 
-    class A:
+    class A(object):
 
       def __call__(self, position_arg1, position_arg2):
         return position_arg1, position_arg2
@@ -5541,25 +5550,6 @@ class MultiDeviceTest(test.TestCase, parameterized.TestCase):
     x = set([1, 2])
     with self.assertRaises(NotImplementedError):
       f()
-
-  # TODO(panzf): remove this test after exposing manual API, as the integration
-  # testcase can be turned on at that time.
-  def test_inner_nested_tf_function_raise_error(self):
-    @def_function.function
-    def tf_f():
-
-      @def_function.function
-      def tf_g():
-        cx = ops.get_default_graph()._experimental_capture_side_input_by_ref(  # pylint: disable=protected-access
-            'lambda: x', lambda: x)
-        return cx
-
-      return tf_g()
-
-    x = constant_op.constant(0)  # pylint: disable=unused-variable
-    with self.assertRaisesRegex(
-        NotImplementedError, 'Manual side input usage for inner nested'):
-      tf_f()
 
   @parameterized.parameters(
       (1, int, 2, int, 2),

@@ -32,6 +32,7 @@ py_library(
         "//tensorflow/python/framework:constant_op",
         "//tensorflow/python/framework:for_generated_wrappers",
         "//tensorflow/python/util",
+        "@six_archive//:six",
     ],
 )
 

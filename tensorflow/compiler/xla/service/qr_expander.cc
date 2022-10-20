@@ -515,7 +515,7 @@ StatusOr<HloInstruction*> QrExpander::ExpandInstruction(
       absl::StrFormat("xla.%s_%s", instruction->custom_call_target(),
                       instruction->operand(0)->shape().ToString());
 
-  HloModule* module = instruction->GetModule();
+  HloModule* module = instruction->parent()->parent();
 
   HloComputation*& computation =
       computation_cache_.emplace(name, nullptr).first->second;

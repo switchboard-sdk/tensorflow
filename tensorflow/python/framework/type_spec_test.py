@@ -20,6 +20,7 @@ import collections
 from absl.testing import parameterized
 
 import numpy as np
+import six
 
 from tensorflow.core.framework import full_type_pb2
 from tensorflow.core.function import trace_type
@@ -37,7 +38,7 @@ from tensorflow.python.util import nest
 from tensorflow.python.util.compat import collections_abc
 
 
-class TwoTensors:
+class TwoTensors(object):
   """A simple value type to test TypeSpec.
 
   Contains two tensors (x, y) and a string (color).  The color value is a
@@ -107,7 +108,7 @@ type_spec.register_type_spec_from_value_converter(
     TwoTensors, TwoTensorsSpec.from_value)
 
 
-class TwoComposites:
+class TwoComposites(object):
   """A simple value type to test TypeSpec.
 
   Contains two composite tensorstensors (x, y) and a string (color).
@@ -165,7 +166,7 @@ type_spec.register_type_spec_from_value_converter(
     TwoComposites, TwoCompositesSpec.from_value)
 
 
-class NestOfTensors:
+class NestOfTensors(object):
   """CompositeTensor containing a nest of tensors."""
 
   def __init__(self, x):
@@ -194,9 +195,9 @@ class NestOfTensorsSpec(type_spec.TypeSpec):
   def __repr__(self):
     if hasattr(self.spec, "_fields") and isinstance(
         self.spec._fields, collections_abc.Sequence) and all(
-            isinstance(f, str) for f in self.spec._fields):
+            isinstance(f, six.string_types) for f in self.spec._fields):
       return "%s(%r)" % (type(self).__name__, self._serialize())
-    return super().__repr__()
+    return super(type_spec.TypeSpec, self).__repr__()  # pylint: disable=bad-super-call
 
   @classmethod
   def from_value(cls, value):

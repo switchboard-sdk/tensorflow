@@ -16,11 +16,13 @@
 import abc
 import functools
 import multiprocessing
-import queue
+import sys
 import threading
 import warnings
 
 import numpy as np
+import six
+from six.moves import queue as Queue  # pylint: disable=redefined-builtin
 
 from tensorflow.core.framework import dataset_metadata_pb2
 from tensorflow.core.framework import dataset_options_pb2
@@ -133,11 +135,9 @@ def _get_type(value):
 
 
 @tf_export("data.Dataset", v1=[])
-class DatasetV2(
-    collections_abc.Iterable,
-    tracking_base.Trackable,
-    composite_tensor.CompositeTensor,
-    metaclass=abc.ABCMeta):
+@six.add_metaclass(abc.ABCMeta)
+class DatasetV2(collections_abc.Iterable, tracking_base.Trackable,
+                composite_tensor.CompositeTensor):
   """Represents a potentially large set of elements.
 
   The `tf.data.Dataset` API supports writing descriptive and efficient input
@@ -615,10 +615,9 @@ class DatasetV2(
       raise RuntimeError("`tf.data.Dataset.as_numpy_iterator()` is only "
                          "supported in eager mode.")
     for component_spec in nest.flatten(self.element_spec):
-      if not isinstance(
-          component_spec,
-          (tensor_spec.TensorSpec, ragged_tensor.RaggedTensorSpec,
-           sparse_tensor_lib.SparseTensorSpec, structure.NoneTensorSpec)):
+      if not isinstance(component_spec,
+                        (tensor_spec.TensorSpec, ragged_tensor.RaggedTensorSpec,
+                         structure.NoneTensorSpec)):
         raise TypeError(
             f"`tf.data.Dataset.as_numpy_iterator()` is not supported for "
             f"datasets that produce values of type {component_spec.value_type}")
@@ -812,12 +811,9 @@ class DatasetV2(
     Returns:
       Dataset: A `Dataset`.
     """
-    # Loaded lazily due to a circular dependency (dataset_ops ->
-    # from_tensor_slices_op -> dataset_ops).
-    from tensorflow.python.data.ops import from_tensor_slices_op  # pylint: disable=g-import-not-at-top
-    return from_tensor_slices_op.from_tensor_slices(tensors, name)
+    return TensorSliceDataset(tensors, name=name)
 
-  class _GeneratorState:
+  class _GeneratorState(object):
     """Stores outstanding iterators created from a Python generator.
 
     This class keeps track of potentially multiple iterators that may have
@@ -1043,11 +1039,14 @@ class DatasetV2(
           # their values.
           try:
             flattened_values = nest.flatten_up_to(output_types, values)
-          except (TypeError, ValueError) as e:
-            raise TypeError(
-                f"`generator` yielded an element that did not match the "
-                f"expected structure. The expected structure was "
-                f"{output_types}, but the yielded element was {values}.") from e
+          except (TypeError, ValueError):
+            six.reraise(
+                TypeError,
+                TypeError(
+                    f"`generator` yielded an element that did not match the "
+                    f"expected structure. The expected structure was "
+                    f"{output_types}, but the yielded element was {values}."),
+                sys.exc_info()[2])
           ret_arrays = []
           for ret, dtype in zip(flattened_values, flattened_types):
             try:
@@ -1055,11 +1054,14 @@ class DatasetV2(
                   script_ops.FuncRegistry._convert(  # pylint: disable=protected-access
                       ret,
                       dtype=dtype.as_numpy_dtype))
-            except (TypeError, ValueError) as e:
-              raise TypeError(
-                  f"`generator` yielded an element that could not be "
-                  f"converted to the expected type. The expected type was "
-                  f"{dtype.name}, but the yielded element was {ret}.") from e
+            except (TypeError, ValueError):
+              six.reraise(
+                  TypeError,
+                  TypeError(
+                      f"`generator` yielded an element that could not be "
+                      f"converted to the expected type. The expected type was "
+                      f"{dtype.name}, but the yielded element was {ret}."),
+                  sys.exc_info()[2])
 
           # Additional type and shape checking to ensure that the components of
           # the generated element match the `output_types` and `output_shapes`
@@ -1106,12 +1108,15 @@ class DatasetV2(
 
           try:
             values = structure.normalize_element(values, output_signature)
-          except (TypeError, ValueError) as e:
-            raise TypeError(
-                f"`generator` yielded an element that did not match the "
-                f"expected structure. The expected structure was "
-                f"{output_signature}, but the yielded element was "
-                f"{values}.") from e
+          except (TypeError, ValueError):
+            six.reraise(
+                TypeError,
+                TypeError(
+                    f"`generator` yielded an element that did not match the "
+                    f"expected structure. The expected structure was "
+                    f"{output_signature}, but the yielded element was "
+                    f"{values}."),
+                sys.exc_info()[2])
 
           values_spec = structure.type_spec_from_value(values)
 
@@ -1288,46 +1293,6 @@ class DatasetV2(
     """
     return ConcatenateDataset(self, dataset, name=name)
 
-  @staticmethod
-  def counter(start=0, step=1, dtype=dtypes.int64, name=None):
-    """Creates a `Dataset` that counts from `start` in steps of size `step`.
-
-    Unlike `tf.data.Dataset.range`, which stops at some ending number,
-    `tf.data.Dataset.counter` produces elements indefinitely.
-
-    >>> dataset = tf.data.experimental.Counter().take(5)
-    >>> list(dataset.as_numpy_iterator())
-    [0, 1, 2, 3, 4]
-    >>> dataset.element_spec
-    TensorSpec(shape=(), dtype=tf.int64, name=None)
-    >>> dataset = tf.data.experimental.Counter(dtype=tf.int32)
-    >>> dataset.element_spec
-    TensorSpec(shape=(), dtype=tf.int32, name=None)
-    >>> dataset = tf.data.experimental.Counter(start=2).take(5)
-    >>> list(dataset.as_numpy_iterator())
-    [2, 3, 4, 5, 6]
-    >>> dataset = tf.data.experimental.Counter(start=2, step=5).take(5)
-    >>> list(dataset.as_numpy_iterator())
-    [2, 7, 12, 17, 22]
-    >>> dataset = tf.data.experimental.Counter(start=10, step=-1).take(5)
-    >>> list(dataset.as_numpy_iterator())
-    [10, 9, 8, 7, 6]
-
-    Args:
-      start: (Optional.) The starting value for the counter. Defaults to 0.
-      step: (Optional.) The step size for the counter. Defaults to 1.
-      dtype: (Optional.) The data type for counter elements. Defaults to
-        `tf.int64`.
-      name: (Optional.) A name for the tf.data operation.
-
-    Returns:
-      A `Dataset` of scalar `dtype` elements.
-    """
-    # Loaded lazily due to a circular dependency (dataset_ops -> counter_op
-    # -> dataset_ops).
-    from tensorflow.python.data.ops import counter_op  # pylint: disable=g-import-not-at-top
-    return counter_op.counter(start, step, dtype, name=name)
-
   def prefetch(self, buffer_size, name=None):
     """Creates a `Dataset` that prefetches elements from this dataset.
 
@@ -1421,12 +1386,7 @@ class DatasetV2(
       with ops.control_dependencies([assert_not_empty]):
         matching_files = array_ops.identity(matching_files)
 
-      # TODO(b/240947712): Remove lazy import after this method is factored out.
-      # Loaded lazily due to a circular dependency (dataset_ops ->
-      # from_tensor_slices_op -> dataset_ops).
-      from tensorflow.python.data.ops import from_tensor_slices_op  # pylint: disable=g-import-not-at-top
-      dataset = from_tensor_slices_op.TensorSliceDataset(
-          matching_files, is_files=True, name=name)
+      dataset = TensorSliceDataset(matching_files, is_files=True, name=name)
       if issubclass(Dataset, DatasetV1):
         dataset = DatasetV1Adapter(dataset)
       if shuffle:
@@ -3783,9 +3743,9 @@ class DatasetV1(DatasetV2):
             "you are calling `make_one_shot_iterator()` captures a stateful "
             "object, such as a `tf.Variable` or `tf.lookup.StaticHashTable`, "
             "which is not supported. Use `make_initializable_iterator()` "
-            "instead.".format(err)) from None
+            "instead.".format(err))
       else:
-        raise
+        six.reraise(ValueError, err)
 
     with ops.colocate_with(self._variant_tensor):
       # pylint: disable=protected-access
@@ -4218,7 +4178,7 @@ def _ensure_same_dataset_graph(dataset):
   """Walks the dataset graph to ensure all datasets come from the same graph."""
   # pylint: disable=protected-access
   current_graph = ops.get_default_graph()
-  bfs_q = queue.Queue()
+  bfs_q = Queue.Queue()
   bfs_q.put(dataset)
   visited = []
   while not bfs_q.empty():
@@ -4320,23 +4280,6 @@ def make_initializable_iterator(dataset, shared_name=None):
 @tf_export("data.experimental.get_structure")
 def get_structure(dataset_or_iterator):
   """Returns the type signature for elements of the input dataset / iterator.
-
-  For example, to get the structure of a `tf.data.Dataset`:
-
-  >>> dataset = tf.data.Dataset.from_tensor_slices([1, 2, 3])
-  >>> tf.data.experimental.get_structure(dataset)
-  TensorSpec(shape=(), dtype=tf.int32, name=None)
-
-  >>> dataset = tf.data.experimental.from_list([(1, 'a'), (2, 'b'), (3, 'c')])
-  >>> tf.data.experimental.get_structure(dataset)
-  (TensorSpec(shape=(), dtype=tf.int32, name=None),
-   TensorSpec(shape=(), dtype=tf.string, name=None))
-
-  To get the structure of an `tf.data.Iterator`:
-
-  >>> dataset = tf.data.Dataset.from_tensor_slices([1, 2, 3])
-  >>> tf.data.experimental.get_structure(iter(dataset))
-  TensorSpec(shape=(), dtype=tf.int32, name=None)
 
   Args:
     dataset_or_iterator: A `tf.data.Dataset` or an `tf.data.Iterator`.
@@ -4668,7 +4611,7 @@ class DatasetSpec(type_spec.BatchableTypeSpec):
             self._dataset_shape == other._dataset_shape)
 
 
-class _NumpyIterator:
+class _NumpyIterator(object):
   """Iterator over a dataset with elements converted to numpy."""
 
   __slots__ = ["_iterator"]
@@ -4751,6 +4694,39 @@ class TensorDataset(DatasetSource):
         output_shapes=structure.get_flat_tensor_shapes(self._structure),
         metadata=self._metadata.SerializeToString())
     super(TensorDataset, self).__init__(variant_tensor)
+
+  @property
+  def element_spec(self):
+    return self._structure
+
+
+class TensorSliceDataset(DatasetSource):
+  """A `Dataset` of slices from a dataset element."""
+
+  def __init__(self, element, is_files=False, name=None):
+    """See `Dataset.from_tensor_slices()` for details."""
+    element = structure.normalize_element(element)
+    batched_spec = structure.type_spec_from_value(element)
+    self._tensors = structure.to_batched_tensor_list(batched_spec, element)
+    if not self._tensors:
+      raise ValueError("Invalid `element`. `element` should not be empty.")
+    self._structure = nest.map_structure(
+        lambda component_spec: component_spec._unbatch(), batched_spec)  # pylint: disable=protected-access
+    self._name = name
+
+    batch_dim = tensor_shape.Dimension(
+        tensor_shape.dimension_value(self._tensors[0].get_shape()[0]))
+    for t in self._tensors[1:]:
+      batch_dim.assert_is_compatible_with(
+          tensor_shape.Dimension(
+              tensor_shape.dimension_value(t.get_shape()[0])))
+
+    variant_tensor = gen_dataset_ops.tensor_slice_dataset(
+        self._tensors,
+        output_shapes=structure.get_flat_tensor_shapes(self._structure),
+        is_files=is_files,
+        metadata=self._metadata.SerializeToString())
+    super(TensorSliceDataset, self).__init__(variant_tensor)
 
   @property
   def element_spec(self):
@@ -5248,19 +5224,21 @@ def _padded_shape_to_tensor(padded_shape, input_component_shape):
     ret = ops.convert_to_tensor(
         [dim if dim is not None else -1
          for dim in padded_shape_as_shape.as_list()], dtype=dtypes.int64)
-  except (TypeError, ValueError) as e:
+  except (TypeError, ValueError):
     # The argument was not trivially convertible to a
     # `tf.TensorShape`, so fall back on the conversion to tensor
     # machinery.
     ret = ops.convert_to_tensor(padded_shape, preferred_dtype=dtypes.int64)
     if ret.shape.dims is not None and len(ret.shape.dims) != 1:
-      raise ValueError(
+      six.reraise(ValueError, ValueError(
           f"Padded shape {padded_shape} must be a `tf.int64` vector tensor, "
-          f"but its shape was {ret.shape}.") from e
+          f"but its shape was {ret.shape}."), sys.exc_info()[2])
     if ret.dtype != dtypes.int64:
-      raise TypeError(
-          f"Padded shape {padded_shape} must be a `tf.int64` vector "
-          f"tensor, but its element type was {ret.dtype.name}.") from e
+      six.reraise(
+          TypeError,
+          TypeError(f"Padded shape {padded_shape} must be a `tf.int64` vector "
+                    f"tensor, but its element type was {ret.dtype.name}."),
+          sys.exc_info()[2])
     padded_shape_as_shape = tensor_util.constant_value_as_shape(ret)
 
   if not _is_padded_shape_compatible_with(padded_shape_as_shape,

@@ -47,6 +47,10 @@ limitations under the License.
 #include "mlir/IR/Types.h"  // from @llvm-project
 #include "mlir/Pass/Pass.h"  // from @llvm-project
 #include "mlir/Support/LogicalResult.h"  // from @llvm-project
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/IR/chlo_ops.h"
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/utils/convert_op_folder.h"
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/utils/hlo_utils.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_ops.h"
 #include "tensorflow/compiler/mlir/xla/attribute_importer.h"
 #include "tensorflow/compiler/mlir/xla/transforms/passes.h"
@@ -55,10 +59,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/client/lib/conv_grad_size_util.h"
 #include "tensorflow/compiler/xla/client/padding.h"
 #include "tensorflow/compiler/xla/client/sharding_builder.h"
-#include "tensorflow/compiler/xla/mlir_hlo/include/mlir-hlo/Dialect/mhlo/IR/hlo_ops.h"
-#include "tensorflow/compiler/xla/mlir_hlo/include/mlir-hlo/utils/convert_op_folder.h"
-#include "tensorflow/compiler/xla/mlir_hlo/include/mlir-hlo/utils/hlo_utils.h"
-#include "tensorflow/compiler/xla/mlir_hlo/stablehlo/stablehlo/dialect/ChloOps.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/core/framework/kernel_shape_util.h"
 #include "tensorflow/core/framework/rng_alg.h"
@@ -2832,7 +2832,7 @@ class ConvertAvgPoolGradOp : public OpRewritePattern<OpTy> {
         return failure();
       }
       ::xla::SpatialDimensionOutputSizeAndPadding &conv_grad_spatial_dim =
-          status.value();
+          status.ValueOrDie();
       // Subtract the original exterior padding since it doesn't contribute to
       // the gradient. Note that we save one `PadOp` and some unnecessary kernel
       // computations, compared to the `xla::AvgPoolGrad` implementation, by
@@ -6644,8 +6644,7 @@ class ConvertQrOp : public OpRewritePattern<TF::QrOp> {
         loc, RankedTensorType::get({m}, builder->getIntegerType(32)),
         builder->getI64IntegerAttr(0));
     Value gtk = builder->create<chlo::BroadcastCompareOp>(
-        loc, iota, k, GetI64ElementsAttr({}, builder),
-        chlo::ComparisonDirection::GT);
+        loc, iota, k, GetI64ElementsAttr({}, builder), ComparisonDirection::GT);
     gtk = builder->create<ConvertOp>(loc, gtk, x_type.getElementType());
     Value x_after_k = builder->create<chlo::BroadcastMulOp>(
         loc, x, gtk, GetI64ElementsAttr({minor_dim}, builder));
@@ -6661,10 +6660,10 @@ class ConvertQrOp : public OpRewritePattern<TF::QrOp> {
 
     Value sigma_is_zero = builder->create<chlo::BroadcastCompareOp>(
         loc, sigma.getResult(0), zero, GetI64ElementsAttr({}, builder),
-        chlo::ComparisonDirection::EQ);
+        ComparisonDirection::EQ);
     Value alpha_is_negative = builder->create<chlo::BroadcastCompareOp>(
         loc, alpha, zero, GetI64ElementsAttr({}, builder),
-        chlo::ComparisonDirection::LT);
+        ComparisonDirection::LT);
     auto batch_size_one = builder->create<BroadcastOp>(
         loc, one, GetI64ElementsAttr(batch_dims, builder));
     Value signed_mu = builder->create<chlo::BroadcastMulOp>(
@@ -6683,8 +6682,7 @@ class ConvertQrOp : public OpRewritePattern<TF::QrOp> {
         builder->create<SelectOp>(loc, sigma_is_zero, batch_size_one, divisor);
 
     Value eqk = builder->create<chlo::BroadcastCompareOp>(
-        loc, iota, k, GetI64ElementsAttr({}, builder),
-        chlo::ComparisonDirection::EQ);
+        loc, iota, k, GetI64ElementsAttr({}, builder), ComparisonDirection::EQ);
     eqk = builder->create<ConvertOp>(loc, eqk, x_type.getElementType());
     llvm::SmallVector<int64_t, 4> e_k_shape(batch_dims.size(), 1);
     e_k_shape.push_back(m);
@@ -6790,12 +6788,12 @@ class ConvertQrOp : public OpRewritePattern<TF::QrOp> {
           builder->getI64IntegerAttr(0));
       Value predecessor_mask = builder->create<chlo::BroadcastCompareOp>(
           loc, iota, j, GetI64ElementsAttr({}, builder),
-          chlo::ComparisonDirection::LT);
+          ComparisonDirection::LT);
       predecessor_mask = builder->create<ConvertOp>(loc, predecessor_mask,
                                                     a_type.getElementType());
       Value mask = builder->create<chlo::BroadcastCompareOp>(
           loc, iota, j, GetI64ElementsAttr({}, builder),
-          chlo::ComparisonDirection::EQ);
+          ComparisonDirection::EQ);
       mask = builder->create<ConvertOp>(loc, mask, a_type.getElementType());
       mask = builder->create<BroadcastOp>(
           loc,
@@ -6822,7 +6820,7 @@ class ConvertQrOp : public OpRewritePattern<TF::QrOp> {
           builder->getI64IntegerAttr(minor_dim + 1));
       Value xa_mask = builder->create<chlo::BroadcastCompareOp>(
           loc, iota_mn, j, GetI64ElementsAttr({}, builder),
-          chlo::ComparisonDirection::EQ);
+          ComparisonDirection::EQ);
       a = builder->create<SelectOp>(loc, xa_mask, new_x, a);
 
       // vs[:, j] = v
@@ -6859,7 +6857,7 @@ class ConvertQrOp : public OpRewritePattern<TF::QrOp> {
                              builder));
       Value taus_mask = builder->create<chlo::BroadcastCompareOp>(
           loc, iota_n, j, GetI64ElementsAttr({}, builder),
-          chlo::ComparisonDirection::EQ);
+          ComparisonDirection::EQ);
       auto taus_update = builder->create<SelectOp>(
           loc, taus_mask,
           StaticBinaryBroadcast<AddOp>(
@@ -6943,7 +6941,7 @@ class ConvertQrOp : public OpRewritePattern<TF::QrOp> {
                              builder));
       auto compare = builder->create<chlo::BroadcastCompareOp>(
           loc, iota_mn, j, GetI64ElementsAttr({}, builder),
-          chlo::ComparisonDirection::GE);
+          ComparisonDirection::GE);
       auto y = builder->create<SelectOp>(loc, compare, zero, vs);
 
       // yv has shape [..., n, 1]
@@ -7225,31 +7223,6 @@ class ConvertXlaVariadicSortOp
     return success();
   }
 };
-
-// Convert tf.XlaReducePrecision to mhlo.ReducePrecision
-class ConvertXlaReducePrecisionOp
-    : public OpRewritePattern<TF::XlaReducePrecisionOp> {
- public:
-  using OpRewritePattern::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(TF::XlaReducePrecisionOp op,
-                                PatternRewriter &rewriter) const override {
-    IntegerType int32_type = rewriter.getIntegerType(32);
-    APInt exponent_bits = op.exponent_bitsAttr().getValue();
-    // Truncating to 32-bits is safe, since pasing any number above the dtype
-    // size (which is at most 64, for float64) is equivalent to passing the
-    // dtype size.
-    IntegerAttr new_exponent_attr =
-        IntegerAttr::get(int32_type, exponent_bits.truncSSat(32));
-    APInt mantissa_bits = op.mantissa_bitsAttr().getValue();
-    IntegerAttr new_mantissa_attr =
-        IntegerAttr::get(int32_type, mantissa_bits.truncSSat(32));
-    rewriter.replaceOpWithNewOp<mhlo::ReducePrecisionOp>(
-        op, op.getType(), op.operand(), new_exponent_attr, new_mantissa_attr);
-    return success();
-  }
-};
-
 }  // end namespace
 
 #include "tensorflow/compiler/mlir/xla/transforms/generated_legalize_tf.inc"
@@ -7335,7 +7308,6 @@ void PopulateLegalizeTfPatterns(MLIRContext *context,
     ConvertXlaShardingOp,
     ConvertXlaDynamicUpdateSliceOp,
     ConvertXlaConvV2Op,
-    ConvertXlaReducePrecisionOp,
     ConvertXlaReduceScatterOp,
     ConvertXlaReduceWindowOp,
     ConvertXlaRngBitGeneratorOp,

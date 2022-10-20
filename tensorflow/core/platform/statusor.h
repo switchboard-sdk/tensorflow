@@ -25,7 +25,7 @@ limitations under the License.
 //
 //  StatusOr<float> result = DoBigCalculationThatCouldFail();
 //  if (result.ok()) {
-//    float answer = result.value();
+//    float answer = result.ValueOrDie();
 //    printf("Big calculation yielded: %f", answer);
 //  } else {
 //    LOG(ERROR) << result.status();
@@ -35,7 +35,7 @@ limitations under the License.
 //
 //  StatusOr<Foo*> result = FooFactory::MakeNewFoo(arg);
 //  if (result.ok()) {
-//    std::unique_ptr<Foo> foo(result.value());
+//    std::unique_ptr<Foo> foo(result.ValueOrDie());
 //    foo->DoSomethingCool();
 //  } else {
 //    LOG(ERROR) << result.status();
@@ -45,7 +45,7 @@ limitations under the License.
 //
 //  StatusOr<std::unique_ptr<Foo>> result = FooFactory::MakeNewFoo(arg);
 //  if (result.ok()) {
-//    std::unique_ptr<Foo> foo = std::move(result.value());
+//    std::unique_ptr<Foo> foo = std::move(result.ValueOrDie());
 //    foo->DoSomethingCool();
 //  } else {
 //    LOG(ERROR) << result.status();
@@ -68,15 +68,17 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_PLATFORM_STATUSOR_H_
 #define TENSORFLOW_CORE_PLATFORM_STATUSOR_H_
 
+#include "absl/base/attributes.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/status.h"
 #include "tensorflow/core/platform/statusor_internals.h"
 
 namespace tensorflow {
 
-#if TF_HAS_CPP_ATTRIBUTE(nodiscard)
+#if defined(__clang__)
+// Only clang supports warn_unused_result as a type annotation.
 template <typename T>
-class [[nodiscard]] StatusOr;
+class TF_MUST_USE_RESULT StatusOr;
 #endif
 
 template <typename T>
@@ -131,7 +133,7 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   explicit StatusOr(absl::in_place_t, Args&&... args);
 
   // Constructs a new StatusOr with the given value. After calling this
-  // constructor, calls to value() will succeed, and calls to status() will
+  // constructor, calls to ValueOrDie() will succeed, and calls to status() will
   // return OK.
   //
   // NOTE: Not explicit - we want to use StatusOr<T> as a return type
@@ -142,7 +144,7 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   StatusOr(const T& value);
 
   // Constructs a new StatusOr with the given non-ok status. After calling
-  // this constructor, calls to value() will CHECK-fail.
+  // this constructor, calls to ValueOrDie() will CHECK-fail.
   //
   // NOTE: Not explicit - we want to use StatusOr<T> as a return
   // value, so it is convenient and sensible to be able to do 'return
@@ -173,6 +175,14 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   const Status& status() const&;
   Status status() &&;
 
+  // StatusOr<T>::value()
+  //
+  // absl::StatusOr compatible versions of ValueOrDie and ConsumeValueOrDie.
+  const T& value() const&;
+  T& value() &;
+  const T&& value() const&&;
+  T&& value() &&;
+
   // Returns a reference to our current value, or CHECK-fails if !this->ok().
   //
   // DEPRECATED: Prefer accessing the value using `operator*` or `operator->`
@@ -180,28 +190,22 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   // the case of an error status, consider `CHECK_OK(status_or);`.
   // Note: for value types that are cheap to copy, prefer simple code:
   //
-  //   T value = statusor.value();
+  //   T value = statusor.ValueOrDie();
   //
   // Otherwise, if the value type is expensive to copy, but can be left
   // in the StatusOr, simply assign to a reference:
   //
-  //   T& value = statusor.value();  // or `const T&`
+  //   T& value = statusor.ValueOrDie();  // or `const T&`
   //
   // Otherwise, if the value type supports an efficient move, it can be
   // used as follows:
   //
-  //   T value = std::move(statusor).value();
+  //   T value = std::move(statusor).ValueOrDie();
   //
   // The std::move on statusor instead of on the whole expression enables
   // warnings about possible uses of the statusor object after the move.
   // C++ style guide waiver for ref-qualified overloads granted in cl/143176389
   // See go/ref-qualifiers for more details on such overloads.
-  const T& value() const&;
-  T& value() &;
-  const T&& value() const&&;
-  T&& value() &&;
-
-  // Deprecated, use `value()` instead.
   const T& ValueOrDie() const&;
   T& ValueOrDie() &;
   const T&& ValueOrDie() const&&;
@@ -212,7 +216,7 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   // REQUIRES: this->ok() == true, otherwise the behavior is undefined.
   //
   // Use this->ok() or `operator bool()` to verify that there is a current
-  // value. Alternatively, see value() for a similar API that guarantees
+  // value. Alternatively, see ValueOrDie() for a similar API that guarantees
   // CHECK-failing if there is no current value.
   const T& operator*() const&;
   T& operator*() &;
@@ -227,6 +231,11 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   // value.
   const T* operator->() const;
   T* operator->();
+
+  // DEPRECATED: Prefer value().
+  T ABSL_DEPRECATED("Use `value()` instead.") ConsumeValueOrDie() {
+    return std::move(ValueOrDie());
+  }
 
   // Ignores any errors. This method does nothing except potentially suppress
   // complaints from any tools that are checking that errors are not dropped on
@@ -280,7 +289,7 @@ template <typename U,
           typename std::enable_if<std::is_convertible<U, T>::value>::type*>
 inline StatusOr<T>& StatusOr<T>::operator=(const StatusOr<U>& other) {
   if (other.ok())
-    this->Assign(other.value());
+    this->Assign(other.ValueOrDie());
   else
     this->Assign(other.status());
   return *this;
@@ -297,7 +306,7 @@ template <typename U,
           typename std::enable_if<std::is_convertible<U, T>::value>::type*>
 inline StatusOr<T>& StatusOr<T>::operator=(StatusOr<U>&& other) {
   if (other.ok()) {
-    this->Assign(std::move(other).value());
+    this->Assign(std::move(other).ValueOrDie());
   } else {
     this->Assign(std::move(other).status());
   }
@@ -412,7 +421,7 @@ void StatusOr<T>::IgnoreError() const {
 #define TF_ASSERT_OK_AND_ASSIGN_IMPL(statusor, lhs, rexpr)  \
   auto statusor = (rexpr);                                  \
   ASSERT_TRUE(statusor.status().ok()) << statusor.status(); \
-  lhs = std::move(statusor).value()
+  lhs = std::move(statusor).ValueOrDie()
 
 #define TF_STATUS_MACROS_CONCAT_NAME(x, y) TF_STATUS_MACROS_CONCAT_IMPL(x, y)
 #define TF_STATUS_MACROS_CONCAT_IMPL(x, y) x##y
@@ -426,7 +435,7 @@ void StatusOr<T>::IgnoreError() const {
   if (TF_PREDICT_FALSE(!statusor.ok())) {              \
     return statusor.status();                          \
   }                                                    \
-  lhs = std::move(statusor).value()
+  lhs = std::move(statusor).ValueOrDie()
 
 }  // namespace tensorflow
 

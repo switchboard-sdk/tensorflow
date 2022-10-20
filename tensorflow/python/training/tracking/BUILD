@@ -25,6 +25,7 @@ py_library(
         "//tensorflow/python/saved_model/registration",
         "//tensorflow/python/trackable:base",
         "//tensorflow/python/training/saving:saveable_object",
+        "@six_archive//:six",
     ],
 )
 
@@ -174,6 +175,7 @@ py_library(
         "//tensorflow/python/training/saving:checkpoint_options",
         "//tensorflow/python/training/saving:functional_saver",
         "//tensorflow/python/training/saving:saveable_object_util",
+        "@six_archive//:six",
     ],
 )
 

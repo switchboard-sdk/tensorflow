@@ -34,9 +34,9 @@ class AllGatherBroadcastReorderTest : public HloTestBase {
     ASSERT_TRUE(changed.ok());
 
     if (expected_output == PassOutput::NoChange) {
-      EXPECT_FALSE(changed.value());
+      EXPECT_FALSE(changed.ValueOrDie());
     } else {
-      EXPECT_TRUE(changed.value());
+      EXPECT_TRUE(changed.ValueOrDie());
       if (expected_output == PassOutput::NonUniformAGPattern) {
         EXPECT_THAT(module->entry_computation()->root_instruction(),
                     m::Broadcast(m::AllGather(m::Parameter())));

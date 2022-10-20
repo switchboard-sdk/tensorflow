@@ -5,7 +5,10 @@ load("//tensorflow:tensorflow.bzl", "cuda_py_test")
 # buildifier: disable=same-origin-load
 load("//tensorflow:tensorflow.bzl", "tf_py_test")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//tensorflow:internal"],
+    licenses = ["notice"],
+)
 
 tf_py_test(
     name = "attention_ops_test",

@@ -59,14 +59,6 @@ cc_library(
         "//conditions:default": [
             "//tensorflow/lite/delegates/xnnpack:xnnpack_delegate",
         ],
-    }) + select({
-        "//tensorflow:ios": [
-            "//tensorflow/lite/delegates/coreml:coreml_delegate",
-        ],
-        "//tensorflow:macos_arm64": [
-            "//tensorflow/lite/delegates/coreml:coreml_delegate",
-        ],
-        "//conditions:default": [],
     }),
 )
 

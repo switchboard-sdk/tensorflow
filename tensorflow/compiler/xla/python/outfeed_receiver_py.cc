@@ -101,7 +101,8 @@ class OutfeedReceiverForPython {
         });
     CHECK(it != clients_.end());
     py::gil_scoped_acquire gil_acquire;  // Need GIL also for LiteralToPython
-    py::object literal_python = LiteralToPython(std::move(literal)).value();
+    py::object literal_python =
+        LiteralToPython(std::move(literal)).ValueOrDie();
     // The callback_ should handle all exceptions in user-code. If we get
     // an exception here, it is a bug in the callback and we should stop.
     callback_python_(WrapWithClient<PjRtDevice>(*it, device), consumer_id,

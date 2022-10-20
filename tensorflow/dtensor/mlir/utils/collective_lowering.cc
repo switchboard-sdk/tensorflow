@@ -240,7 +240,7 @@ mlir::LogicalResult LowerAllReduceOpImpl(
     // groups in one program reducing over all hosts and reducing over pairs
     // of hosts, we need unique ids for each case.
     mlir::Value device_id = ops_util::ReshapeScalarToSizeType(
-        builder, DeviceId(all_reduce.getResult()).value(), loc);
+        builder, DeviceId(all_reduce.getResult()).ValueOrDie(), loc);
     // TODO(b/188076080): Clean up device id.
     mlir::Value start_device_id = ops_util::GetR1Const(
         {(*output_layout).mesh().min_global_device_id()}, builder, loc);
@@ -505,9 +505,10 @@ mlir::LogicalResult LowerAllGatherOp(mlir::TF::DTensorAllGatherOp all_gather) {
         if (!device_loc_or_status.ok())
           return all_gather.emitOpError()
                  << device_loc_or_status.status().error_message();
-        const DeviceLocation device_loc = device_loc_or_status.value();
-        const int32 mesh_idx =
-            src_layout.mesh().idx_for_dim(src_layout.sharding_spec(i)).value();
+        const DeviceLocation device_loc = device_loc_or_status.ValueOrDie();
+        const int32 mesh_idx = src_layout.mesh()
+                                   .idx_for_dim(src_layout.sharding_spec(i))
+                                   .ValueOrDie();
         const int64 device_offset = device_loc[mesh_idx];
         const int64 step = output_shape[i] / src_layout.num_shards()[i];
         device_id_to_begin_flat.push_back(step * device_offset);
@@ -526,7 +527,7 @@ mlir::LogicalResult LowerAllGatherOp(mlir::TF::DTensorAllGatherOp all_gather) {
   if (!device_id_scalar_or_status.ok())
     return all_gather.emitOpError()
            << device_id_scalar_or_status.status().error_message();
-  const mlir::Value device_id_scalar = device_id_scalar_or_status.value();
+  const mlir::Value device_id_scalar = device_id_scalar_or_status.ValueOrDie();
   const mlir::Value device_id =
       ops_util::ReshapeScalarToSizeType(builder, device_id_scalar, loc);
   // TODO(b/188076080): Clean up device id.
@@ -569,7 +570,7 @@ mlir::LogicalResult LowerAllGatherOp(mlir::TF::DTensorAllGatherOp all_gather) {
   if (!partitions_or_status.ok())
     return all_gather.emitOpError()
            << partitions_or_status.status().error_message();
-  auto partitions = partitions_or_status.value();
+  auto partitions = partitions_or_status.ValueOrDie();
   const int32 num_partitions = partitions.size();
   assert(num_partitions <= num_devices);
   if (num_partitions == num_devices) {
@@ -603,7 +604,7 @@ mlir::LogicalResult LowerAllGatherOp(mlir::TF::DTensorAllGatherOp all_gather) {
   if (!device_type_or_status.ok())
     return all_gather.emitOpError()
            << device_type_or_status.status().error_message();
-  const std::string device_type = device_type_or_status.value();
+  const std::string device_type = device_type_or_status.ValueOrDie();
 
   // Support bool types by switching to Any reduce rather than Add. For each
   // position in the tensor, only one task in the reduction group can have a 1.
@@ -637,7 +638,7 @@ mlir::LogicalResult LowerAllScatterOp(
   if (!mesh_coordinates_status.ok())
     return all_scatter.emitOpError()
            << mesh_coordinates_status.status().error_message();
-  mlir::Value mesh_coordinates = mesh_coordinates_status.value();
+  mlir::Value mesh_coordinates = mesh_coordinates_status.ValueOrDie();
 
   // We need to compute the slice offset, which is dynamic based on the id.
   //

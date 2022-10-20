@@ -82,11 +82,12 @@ class TensorDescriptor : public GPUObjectDescriptor {
   size_t GetSizeInBytesForShape(const BHWDC& shape5d) const;
 
   bool HasAxis(Axis axis) const;
+  int GetWidthSize(BHWDC shape) const;
+  int GetSliceStrideSize(BHWDC shape) const;
 
   absl::Status GetLinkingContextFromWriteSelector(
       const std::vector<std::string>& args, std::string* value_name,
-      std::string* x_coord, std::string* y_coord, std::string* z_coord,
-      std::string* s_coord, std::string* b_coord) const;
+      std::string* x_coord, std::string* y_coord, std::string* s_coord) const;
 
   template <DataType T>
   void UploadData(const tflite::gpu::Tensor<BHWC, T>& src);
@@ -98,6 +99,7 @@ class TensorDescriptor : public GPUObjectDescriptor {
   void DownloadData(tflite::gpu::Tensor<BHWDC, T>* dst);
 
   void UploadData(const tflite::gpu::Tensor<HWC, DataType::FLOAT32>& src);
+  void UploadData(const tflite::gpu::Tensor<Linear, DataType::FLOAT32>& src);
 
   int GetLinearIndex(const BHWDC& shape5d, int b, int x, int y, int d, int s,
                      int sub_c) const;
@@ -129,13 +131,7 @@ class TensorDescriptor : public GPUObjectDescriptor {
   absl::Status UpdateToSupportedStorageType(const GpuInfo& gpu_info,
                                             const BHWC& shape);
 
-  // shape must be initialized when using this function
   std::vector<uint64_t> GetStorageDims() const;
-  // shape must be initialized when using this function
-  int3 GetFullTensorRegion() const;
-  // shape must be initialized when using this function
-  uint64_t GetMemorySizeInBytes() const;
-  // shape must be initialized when using this function
   int GetElementSize() const;
 
   void SetUseBufferForWriteOnlyTexture2d(bool value) {
@@ -168,14 +164,6 @@ class TensorDescriptor : public GPUObjectDescriptor {
       const TensorDescriptor& desc, flatbuffers::FlatBufferBuilder* builder);
   friend void Decode(const data::TensorDescriptor* fb_desc,
                      TensorDescriptor* desc);
-
-  friend TensorDescriptor CreateConstantLinearTensorDescriptor(
-      DataType data_type, TensorStorageType storage_type,
-      const tflite::gpu::Tensor<Linear, DataType::FLOAT32>& src);
-
-  friend TensorDescriptor CreateConstantHWVec4TensorDescriptor(
-      DataType data_type, TensorStorageType storage_type, int width, int height,
-      const uint8_t* data);
 
   absl::Status PerformReadSelector(
       const GpuInfo& gpu_info, const std::vector<std::string>& args,
@@ -216,6 +204,8 @@ class TensorDescriptor : public GPUObjectDescriptor {
                     const std::string& var_name,
                     const std::vector<std::string>& coords) const;
 
+  bool IsBatchedWidth() const;
+
   absl::Status MaybeGetDataTypeFromTemplateArgs(
       const std::vector<std::string>& template_args, DataType* result) const;
 
@@ -246,9 +236,6 @@ class TensorDescriptor : public GPUObjectDescriptor {
                                              const std::string& zc,
                                              const std::string& sc,
                                              const std::string& bc) const;
-  std::vector<std::string> GetPhysicalCoordsLinear(const std::string& x) const;
-  std::vector<std::string> GetPhysicalCoordsHW(const std::string& x,
-                                               const std::string& y) const;
 
   bool ParseCoordsFromArgs(const std::vector<std::string>& args, int offset,
                            std::string* xc, std::string* yc, std::string* zc,
@@ -266,7 +253,6 @@ class TensorDescriptor : public GPUObjectDescriptor {
   // totally different.
   Layout layout_ =
       Layout::UNKNOWN;  // Supported layouts is HWC, BHWC, HWDC, BHWDC
-                        // HW and LINEAR (for constant objects only)
 
   // applicable only for TEXTURE_2D.
   // When Texture 2d created from buffer, we can use it as texture or as buffer.
@@ -295,20 +281,6 @@ TensorDescriptor CreateBhwcTensorDescriptor(DataType data_type,
 TensorDescriptor CreateHwcTensorDescriptor(DataType data_type,
                                            TensorStorageType storage_type,
                                            const HWC& shape);
-
-TensorStorageType GetStorageTypeForLinearTensor(const GpuInfo& gpu_info,
-                                                DataType data_type,
-                                                const Linear& shape);
-TensorDescriptor CreateConstantLinearTensorDescriptor(
-    DataType data_type, TensorStorageType storage_type,
-    const tflite::gpu::Tensor<Linear, DataType::FLOAT32>& src);
-TensorDescriptor CreateConstantLinearTensorDescriptor(
-    const GpuInfo& gpu_info, DataType data_type,
-    const tflite::gpu::Tensor<Linear, DataType::FLOAT32>& src);
-
-TensorDescriptor CreateConstantHWVec4TensorDescriptor(
-    DataType data_type, TensorStorageType storage_type, int width, int height,
-    const uint8_t* data);
 
 template <DataType T>
 void TensorDescriptor::UploadData(const tflite::gpu::Tensor<BHWC, T>& src) {
@@ -339,22 +311,12 @@ void TensorDescriptor::DownloadData(tflite::gpu::Tensor<BHWDC, T>* dst) {
 template <typename T>
 void TensorDescriptor::UploadData(const T* src) {
   data_.resize(GetSizeInBytesForShape(shape_));
-  if (layout_ == Layout::LINEAR) {
-    if (data_type_ == DataType::FLOAT16) {
-      half* gpu_data = reinterpret_cast<half*>(data_.data());
-      DataFromLinear(src, *this, gpu_data);
-    } else {
-      T* gpu_data = reinterpret_cast<T*>(data_.data());
-      DataFromLinear(src, *this, gpu_data);
-    }
-  } else {  // HWC/BHWC/HWDC/BHWDC
-    if (data_type_ == DataType::FLOAT16) {
-      half* gpu_data = reinterpret_cast<half*>(data_.data());
-      DataFromBHWDC(src, shape_, *this, gpu_data);
-    } else {
-      T* gpu_data = reinterpret_cast<T*>(data_.data());
-      DataFromBHWDC(src, shape_, *this, gpu_data);
-    }
+  if (data_type_ == DataType::FLOAT16) {
+    half* gpu_data = reinterpret_cast<half*>(data_.data());
+    DataFromBHWDC(src, shape_, *this, gpu_data);
+  } else {
+    T* gpu_data = reinterpret_cast<T*>(data_.data());
+    DataFromBHWDC(src, shape_, *this, gpu_data);
   }
 }
 
@@ -367,27 +329,6 @@ void TensorDescriptor::DownloadData(T* dst) {
   } else {
     T* gpu_data = reinterpret_cast<T*>(data_.data());
     DataToBHWDC(gpu_data, shape_, *this, dst);
-  }
-}
-
-template <typename FromType, typename ToType>
-void DataFromLinear(const FromType* src, const TensorDescriptor& desc,
-                    ToType* dst) {
-  const int element_size = desc.GetElementSize();
-  const Linear shape = Linear(desc.GetBHWCShape().c);
-  const int slices = DivideRoundUp(shape.v, element_size);
-  for (int s = 0; s < slices; ++s) {
-    for (int c = 0; c < element_size; ++c) {
-      FromType value;
-      if (s * 4 + c < shape.v) {
-        const int cpu_index = shape.LinearIndex({s * element_size + c});
-        value = src[cpu_index];
-      } else {
-        value = 0;
-      }
-      int gpu_index = s * element_size + c;
-      dst[gpu_index] = value;
-    }
   }
 }
 

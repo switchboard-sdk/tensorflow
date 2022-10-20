@@ -47,31 +47,25 @@ class PjRtCApiDevice : public PjRtDevice {
 
   absl::string_view device_kind() const override;
 
-  absl::string_view DebugString() const override;
+  absl::string_view DebugString() const override {
+    return wrapped_->DebugString();
+  }
 
-  absl::string_view ToString() const override;
+  std::string ToString() const override {
+    return absl::StrCat("PjRtCApiDevice(wrapped=", wrapped_->ToString(), ")");
+  }
 
   Status TransferToInfeed(const LiteralSlice& literal) override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->TransferToInfeed(literal);
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented("PJRT C API does not support TransferToInfeed");
   }
 
   Status TransferFromOutfeed(MutableBorrowingLiteral literal) override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->TransferFromOutfeed(std::move(literal));
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented("PJRT C API does not support TransferFromOutfeed");
   }
 
   std::unique_ptr<ScopedAsyncTrackingEvent> CreateAsyncTrackingEvent(
       absl::string_view description) const override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->CreateAsyncTrackingEvent(description);
-#endif  // PJRT_C_API_BYPASS
-    LOG(WARNING) << "PJRT C API does not support CreateAsyncTrackingEvent";
-    return nullptr;
   }
 
   const absl::flat_hash_map<std::string, PjRtDeviceAttribute>& Attributes()
@@ -116,48 +110,41 @@ class PjRtCApiClient : public PjRtClient {
 
   StatusOr<PjRtDevice*> LookupAddressableDevice(
       int local_hardware_id) const override {
-#ifdef PJRT_C_API_BYPASS
     TF_ASSIGN_OR_RETURN(PjRtDevice * wrapped_device,
                         wrapped_->LookupAddressableDevice(local_hardware_id));
     return GetCApiDevice(wrapped_device);
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented("PJRT C API does not support LookupAddressableDevice");
   }
 
   PjRtPlatformId platform_id() const override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->platform_id();
-#endif  // PJRT_C_API_BYPASS
-    CHECK(false) << "PJRT C API does not support platform_id.";
   }
 
   absl::string_view platform_name() const override;
 
   absl::string_view platform_version() const override;
 
-  // TODO(b/244756954): Rethink this function altogether
   PjRtRuntimeType runtime_type() const override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->runtime_type();
-#endif  // PJRT_C_API_BYPASS
-    return PjRtRuntimeType::kTfrt;
   }
 
   StatusOr<DeviceAssignment> GetDefaultDeviceAssignment(
-      int num_replicas, int num_partitions) const override;
+      int num_replicas, int num_partitions) const override {
+    return wrapped_->GetDefaultDeviceAssignment(num_replicas, num_partitions);
+  }
 
   StatusOr<std::unique_ptr<HloCostAnalysis>> GetHloCostAnalysis() override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->GetHloCostAnalysis();
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented("PJRT C API does not support GetHloCostAnalysis");
   }
 
   StatusOr<std::unique_ptr<PjRtLoadedExecutable>> Compile(
-      const XlaComputation& computation, CompileOptions options) override;
+      const XlaComputation& computation, CompileOptions options) override {
+    return WrapExecutable(wrapped_->Compile(computation, options));
+  }
 
   StatusOr<std::unique_ptr<PjRtLoadedExecutable>> Compile(
-      mlir::ModuleOp module, CompileOptions options) override;
+      mlir::ModuleOp module, CompileOptions options) override {
+    return WrapExecutable(wrapped_->Compile(module, options));
+  }
 
   StatusOr<std::optional<std::string>> ExecutableFingerprint(
       const PjRtLoadedExecutable& executable) const override;
@@ -186,27 +173,24 @@ class PjRtCApiClient : public PjRtClient {
       std::optional<absl::Span<int64_t const>> byte_strides,
       HostBufferSemantics host_buffer_semantics,
       std::function<void()> on_done_with_host_buffer,
-      PjRtDevice* device) override;
+      PjRtDevice* device) override {
+    return WrapBuffer(wrapped_->BufferFromHostBuffer(
+        data, type, dims, byte_strides, host_buffer_semantics,
+        on_done_with_host_buffer, PjRtCApiDevice::GetWrapped(device)));
+  }
 
   StatusOr<std::unique_ptr<PjRtBuffer>> BufferFromHostLiteral(
       const LiteralSlice& literal, PjRtDevice* device) override {
-#ifdef PJRT_C_API_BYPASS
     return WrapBuffer(wrapped_->BufferFromHostLiteral(
         literal, PjRtCApiDevice::GetWrapped(device)));
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented("PJRT C API does not support BufferFromHostLiteral");
   }
 
   StatusOr<std::unique_ptr<PjRtBuffer>> CreateViewOfDeviceBuffer(
       void* device_ptr, const Shape& shape, PjRtDevice* device,
       std::function<void()> on_delete_callback) override {
-#ifdef PJRT_C_API_BYPASS
     return WrapBuffer(wrapped_->CreateViewOfDeviceBuffer(
         device_ptr, shape, PjRtCApiDevice::GetWrapped(device),
         on_delete_callback));
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented(
-        "PJRT C API does not support CreateViewOfDeviceBuffer");
   }
 
   StatusOr<std::uintptr_t> UnsafeBufferPointer(PjRtBuffer* buffer) override;
@@ -266,8 +250,6 @@ class PjRtCApiClient : public PjRtClient {
   }
 
  private:
-  void InitDevices();
-
   const PJRT_Api* c_api_;
   std::unique_ptr<PJRT_Client, ::pjrt::PJRT_ClientDeleter> c_client_;
 
@@ -282,57 +264,49 @@ class PjRtCApiClient : public PjRtClient {
   // wrapped_ and related functionality should be removed.
   PjRtClient* wrapped_;
   absl::flat_hash_map<PjRtDevice*, PjRtCApiDevice*> wrapped_device_map_;
+
+  void InitDevices();
 };
 
 class PjRtCApiBuffer : public PjRtBuffer {
  public:
   PjRtCApiBuffer(PjRtCApiClient* client, PJRT_Buffer* buffer);
+  ~PjRtCApiBuffer() override;
 
   const Shape& on_device_shape() const override;
 
   StatusOr<Shape> logical_on_device_shape() override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->logical_on_device_shape();
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented("PJRT C API does not support logical_on_device_shape");
   }
 
-  PjRtDevice* device() const override;
+  PjRtDevice* device() const override {
+    return client_->GetCApiDevice(wrapped_->device());
+  }
 
   PjRtClient* client() const override { return client_; }
 
   StatusOr<std::unique_ptr<ExternalReference>> AcquireExternalReference()
       override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->AcquireExternalReference();
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented(
-        "PJRT C API does not support AcquireExternalReference");
   }
 
-  PjRtFuture<Status> ToLiteral(MutableLiteralBase* literal) override;
+  PjRtFuture<Status> ToLiteral(MutableLiteralBase* literal) override {
+    return wrapped_->ToLiteral(literal);
+  }
 
   StatusOr<size_t> GetOnDeviceSizeInBytes() const override;
 
   PjRtFuture<Status> CopyRawToHost(void* dst, int64_t offset,
                                    int64_t transfer_size) override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->CopyRawToHost(dst, offset, transfer_size);
-#endif  // PJRT_C_API_BYPASS
-    return PjRtFuture<Status>(
-        Unimplemented("PJRT C API does not support CopyRawToHost"));
   }
 
   void Delete() override;
 
   StatusOr<std::unique_ptr<ExternalReference>> ReleaseDeviceMemoryOwnership(
       bool wait_for_operations_to_complete) override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped_->ReleaseDeviceMemoryOwnership(
         wait_for_operations_to_complete);
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented(
-        "PJRT C API does not support ReleaseDeviceMemoryOwnership");
   }
 
   bool IsDeleted() override;
@@ -352,13 +326,15 @@ class PjRtCApiBuffer : public PjRtBuffer {
     LOG(ERROR) << "PJRT C API does not support CopyToRemoteDeviceScattered";
   }
 
-  PjRtFuture<Status> GetReadyFuture() override;
+  PjRtFuture<Status> GetReadyFuture() override {
+    return wrapped_->GetReadyFuture();
+  }
 
   bool IsOnCpu() const override;
 
   PjRtBuffer* wrapped() const { return wrapped_; }
 
-  PJRT_Buffer* c_buffer() const { return buffer_.get(); }
+  PJRT_Buffer* c_buffer() const { return buffer_; }
 
   static PjRtBuffer* GetWrapped(PjRtBuffer* c_api_buffer) {
     return tensorflow::down_cast<PjRtCApiBuffer*>(c_api_buffer)->wrapped();
@@ -377,31 +353,17 @@ class PjRtCApiBuffer : public PjRtBuffer {
   const PJRT_Api* pjrt_c_api() const { return client_->pjrt_c_api(); }
 
  private:
-  // TODO(b/238999986): Refactor or Remove.
-  void set_shape();
-
-  // Gets the raw pointer to `readiness_event_`. If `readiness_event_` has not
-  // yet been initialized, this function does so before returning the pointer.
-  PJRT_Event* GetReadyEvent();
-
-  // `MakePromiseTrackEvent` sets `readiness_promise_` up to track
-  // `readiness_event_`. This is used to implement `GetReadyFuture()`.
-  // `readiness_promise_` should be created before calling this function.
-  void MakePromiseTrackEvent();
-
   PjRtCApiClient* client_;
-  std::unique_ptr<PJRT_Buffer, ::pjrt::PJRT_BufferDeleter> buffer_;
+  PJRT_Buffer* buffer_;
   std::optional<xla::Shape> shape_;
-  std::unique_ptr<PJRT_Event, ::pjrt::PJRT_EventDeleter> readiness_event_;
-  // This is a shared_ptr to keep the underlying future alive even if
-  // `readiness_promise` is destroyed before `readiness_event`, and the callback
-  // we set on `readiness_event` modifies `readiness_promise_`.
-  std::shared_ptr<PjRtFuture<Status>::Promise> readiness_promise_;
 
   // TODO(amangu): _wrapped is a non-C API pointer that was used to bypass the
   // C API calls until all the C API's got implemented. Remove it when it's
   // usage is reduced to zero.
   PjRtBuffer* wrapped_;
+
+  // TODO(b/238999986): Refactor or Remove.
+  void set_shape();
 };
 
 class PjRtCApiExecutable : public PjRtLoadedExecutable {
@@ -409,7 +371,7 @@ class PjRtCApiExecutable : public PjRtLoadedExecutable {
   PjRtCApiExecutable(PjRtCApiClient* client,
                      std::unique_ptr<PjRtLoadedExecutable> wrapped);
 
-  PjRtCApiExecutable(PjRtCApiClient* client, PJRT_Executable* executable);
+  ~PjRtCApiExecutable() override;
 
   PjRtClient* client() const override { return client_; }
   absl::string_view name() const override;
@@ -417,26 +379,16 @@ class PjRtCApiExecutable : public PjRtLoadedExecutable {
   int num_partitions() const override { return wrapped()->num_partitions(); }
 
   int64_t SizeOfGeneratedCodeInBytes() const override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped()->SizeOfGeneratedCodeInBytes();
-#endif  // PJRT_C_API_BYPASS
-    CHECK(false) << "PJRT C API does not support SizeOfGeneratedCodeInBytes";
   }
 
   const DeviceAssignment& device_assignment() const override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped()->device_assignment();
-#endif  // PJRT_C_API_BYPASS
-    CHECK(false) << "PJRT C API does not support device_assignment";
   }
 
   absl::Span<const LogicalDeviceIds> addressable_device_logical_ids()
       const override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped()->addressable_device_logical_ids();
-#endif  // PJRT_C_API_BYPASS
-    CHECK(false)
-        << "PJRT C API does not support addressable_device_logical_ids";
   }
 
   absl::Span<PjRtDevice* const> addressable_devices() const override {
@@ -445,10 +397,7 @@ class PjRtCApiExecutable : public PjRtLoadedExecutable {
 
   StatusOr<std::vector<std::shared_ptr<HloModule>>> GetHloModules()
       const override {
-#ifdef PJRT_C_API_BYPASS
     return wrapped()->GetHloModules();
-#endif  // PJRT_C_API_BYPASS
-    return Unimplemented("PJRT C API does not support GetHloModules");
   }
 
   StatusOr<std::vector<std::vector<std::unique_ptr<PjRtBuffer>>>> Execute(
@@ -484,12 +433,13 @@ class PjRtCApiExecutable : public PjRtLoadedExecutable {
 
  private:
   PjRtCApiClient* client_;
-  std::unique_ptr<PJRT_Executable, pjrt::PJRT_ExecutableDeleter> executable_;
+  PJRT_Executable* executable_;
   std::vector<PjRtDevice*> addressable_devices_;
 
   void InitDevices();
 };
 
+// Takes ownership of wrapped.
 StatusOr<std::unique_ptr<PjRtClient>> GetCApiClient();
 
 }  // namespace xla

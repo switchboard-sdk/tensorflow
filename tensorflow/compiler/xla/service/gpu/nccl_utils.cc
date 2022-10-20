@@ -19,9 +19,7 @@ limitations under the License.
 #include <string_view>
 #include <utility>
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/strings/str_format.h"
-#include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
 #include "tensorflow/compiler/xla/debug_options_flags.h"
 #include "tensorflow/compiler/xla/service/global_device_id.h"
@@ -124,14 +122,6 @@ StatusOr<std::string> LocalNcclUniqueIdCallback(const NcclCliqueKey&) {
 struct NcclCliqueState {
   ncclUniqueId unique_id;
   int64_t run_id = -1;
-
-  // mu guards ready, status, and communicators during initialization.
-  // Once 'ready' has been notified, the communicators may be accessed without
-  // synchronization.
-  absl::Mutex mu;
-  absl::Notification ready;
-  Status status;
-  absl::flat_hash_map<int, std::unique_ptr<NcclComm>> communicators;
 };
 
 using NcclClique = Lockable<NcclCliqueState>;
@@ -231,13 +221,9 @@ StatusOr<NcclComm::Lock> AcquireNcclComm(
       run_id, op_id, clique_key, unique_id_callback, num_local_participants);
 
   if (!clique->ok()) return clique->status();
-  NcclCliqueState& state = ***clique;
 
-  struct AllCommunicators {
-    absl::Mutex mu;
-    std::vector<NcclComm*> communicators ABSL_GUARDED_BY(mu);
-  };
-  static auto& all_communicators = *new AllCommunicators;
+  auto comm_key = std::make_pair(std::move(clique_key), rank);
+  static auto& comms = *new ThreadSafeMap<decltype(comm_key), NcclComm>;
 
   // Launch a thread that periodically checks all NCCL communicators for
   // asynchronous errors. If an asynchronous error is observed, the communicator
@@ -247,53 +233,19 @@ StatusOr<NcclComm::Lock> AcquireNcclComm(
           tensorflow::ThreadOptions(), "nccl_async_error_thread", [&] {
             while (true) {
               absl::SleepFor(absl::Seconds(30));
-              absl::MutexLock lock(&all_communicators.mu);
-              for (NcclComm* comm : all_communicators.communicators) {
-                CheckNcclAsyncError(*comm);
-              }
+              comms.ForEachValue(CheckNcclAsyncError);
             }
           });
   (void)check_async_error_thread;  // Silence unused variable warning.
 
-  NcclComm::Lock comm;
-  if (state.ready.HasBeenNotified()) {
-    comm = state.communicators[rank]->Acquire();
-  } else {
-    auto comm_ptr = std::make_unique<NcclComm>();
-    comm = comm_ptr->Acquire();
-    int nranks = clique_key.devices().size();
-    const ncclUniqueId& id = state.unique_id;
-    Status status =
-        XLA_CUDA_STATUS(ncclCommInitRank(comm.get(), nranks, id, rank));
-
-    // Add the communicator to the all_communicators list.
-    {
-      absl::MutexLock lock(&all_communicators.mu);
-      all_communicators.communicators.push_back(comm_ptr.get());
-    }
-
-    absl::MutexLock lock(&state.mu);
-    state.status.Update(status);
-    state.communicators[rank] = std::move(comm_ptr);
-
-    // Wait for all communicators to initialize before allowing any progress.
-    // Otherwise we may get deadlocks, because ncclCommInitRank may allocate,
-    // which may block on the completion of device activity on a peer device,
-    // which may depend on the completion of this collective if we do not have a
-    // barrier to prevent it.
-    auto all_initialized = [&]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state.mu) {
-      return state.communicators.size() == num_local_participants;
-    };
-    state.mu.Await(absl::Condition(&all_initialized));
-    status = state.status;
-    if (!state.ready.HasBeenNotified()) {
-      state.ready.Notify();
-    }
-  }
-  if (!state.status.ok()) {
-    return state.status;
+  NcclComm::Lock comm = comms[comm_key].Acquire();
+  if (*comm == nullptr) {
+    int nranks = comm_key.first.devices().size();
+    const ncclUniqueId& id = (**clique)->unique_id;
+    XLA_CUDA_RETURN_IF_ERROR(ncclCommInitRank(comm.get(), nranks, id, rank));
   }
   return comm;
 }
+
 }  // namespace gpu
 }  // namespace xla

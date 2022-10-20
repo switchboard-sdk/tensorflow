@@ -105,9 +105,6 @@ void CopyEventMetadata(const XEventMetadata& src_event_metadata,
       !src_event_metadata.display_name().empty()) {
     dst_event_metadata.set_display_name(src_event_metadata.display_name());
   }
-  if (dst_event_metadata.name().empty() && !src_event_metadata.name().empty()) {
-    dst_event_metadata.set_name(src_event_metadata.name());
-  }
   if (dst_event_metadata.metadata().empty() &&
       !src_event_metadata.metadata().empty()) {
     dst_event_metadata.set_metadata(src_event_metadata.metadata());
@@ -123,7 +120,7 @@ void CopyEventMetadata(const XEventMetadata& src_event_metadata,
       dst_stat.set_ref_value(value_metadata.id());
     }
     dst_stat.set_metadata_id(metadata.id());
-    *dst_event_metadata.add_stats() = std::move(dst_stat);
+    *dst_event_metadata.add_stats() = dst_stat;
   });
 }
 

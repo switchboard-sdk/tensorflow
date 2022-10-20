@@ -313,7 +313,7 @@ HloModuleProto HloModule::ToProto() const {
     proto.add_computations()->Swap(&computation_proto);
   }
   if (has_schedule()) {
-    *proto.mutable_schedule() = schedule().ToProto().value();
+    *proto.mutable_schedule() = schedule().ToProto().ValueOrDie();
   }
   *proto.mutable_input_output_alias() = input_output_alias_config().ToProto();
   *proto.mutable_dynamic_parameter_binding() =
@@ -337,8 +337,6 @@ HloModuleProto HloModule::ToProto() const {
       *proto.add_spmd_parameters_shardings() = parameter_sharding.ToProto();
     }
   }
-
-  proto.set_use_auto_spmd_partitioning(use_auto_spmd_partitioning_);
 
   for (const HloModuleProto::ProfileInfo& profile_info : profile_info_list_) {
     HloModuleProto::ProfileInfo& profile_info_proto =
@@ -503,8 +501,6 @@ StatusOr<std::unique_ptr<HloModule>> HloModule::CreateFromProto(
   if (!param_shardings.empty()) {
     module->set_spmd_parameters_shardings(param_shardings);
   }
-
-  module->set_use_auto_spmd_partitioning(proto.use_auto_spmd_partitioning());
 
   for (const auto& profile_info : proto.profile_info()) {
     module->add_profile_info(profile_info);

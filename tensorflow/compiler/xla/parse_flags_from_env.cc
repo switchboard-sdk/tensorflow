@@ -32,6 +32,7 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/types/span.h"
+#include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/util/command_line_flags.h"
 
@@ -189,7 +190,7 @@ static absl::Mutex env_argv_mu(absl::kConstInit);
 bool ParseFlagsFromEnvAndDieIfUnknown(
     absl::string_view envvar, const std::vector<tensorflow::Flag>& flag_list) {
   absl::MutexLock lock(&env_argv_mu);
-  auto* env_argv = &EnvArgvs()[envvar];
+  auto* env_argv = &EnvArgvs()[std::string(envvar)];
   SetArgvFromEnv(envvar, env_argv);  // a no-op if already initialized
 
   if (VLOG_IS_ON(1)) {
@@ -240,8 +241,8 @@ bool ParseFlagsFromEnvAndDieIfUnknown(
 void ResetFlagsFromEnvForTesting(absl::string_view envvar, int** pargc,
                                  std::vector<char*>** pargv) {
   absl::MutexLock lock(&env_argv_mu);
-  EnvArgvs().erase(envvar);
-  auto& env_argv = EnvArgvs()[envvar];
+  EnvArgvs().erase(std::string(envvar));
+  auto& env_argv = EnvArgvs()[std::string(envvar)];
   *pargc = &env_argv.argc;
   *pargv = &env_argv.argv;
 }

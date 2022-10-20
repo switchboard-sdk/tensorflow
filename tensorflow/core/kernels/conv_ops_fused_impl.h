@@ -60,14 +60,14 @@ limitations under the License.
 
 #if GOOGLE_CUDA
 #include "third_party/gpus/cudnn/cudnn.h"
-#include "tensorflow/compiler/xla/stream_executor/gpu/gpu_asm_opts.h"
-#include "tensorflow/compiler/xla/stream_executor/gpu/redzone_allocator.h"
-#include "tensorflow/compiler/xla/stream_executor/tf_allocator_adapter.h"
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/util/autotune_maps/conv_autotune_maps.h"
 #include "tensorflow/core/util/autotune_maps/conv_parameters.h"
 #include "tensorflow/core/util/proto/proto_utils.h"
+#include "tensorflow/stream_executor/gpu/gpu_asm_opts.h"
+#include "tensorflow/stream_executor/gpu/redzone_allocator.h"
+#include "tensorflow/stream_executor/tf_allocator_adapter.h"
 #endif  // GOOGLE_CUDA
 
 namespace tensorflow {
@@ -257,6 +257,9 @@ struct LaunchFusedConv2DOp<CPUDevice, T> {
       case FusedComputationType::kUndefined:
         OP_REQUIRES_OK(context, errors::Internal("Fusion type is undefined"));
         break;
+      case FusedComputationType::kBiasAddWithGeluApproximate:
+        OP_REQUIRES_OK(context, errors::Internal("Fusion type is unsupported"));
+        break;
       case FusedComputationType::kBiasAdd:
         conv2d(WithBiasAdd<T>(bias_add_args), context, input, filter, output);
         break;
@@ -301,9 +304,6 @@ struct LaunchFusedConv2DOp<CPUDevice, T> {
                                            fused_batch_norm_args),
                context, input, filter, output);
         break;
-      default:
-        OP_REQUIRES_OK(context, errors::Internal("Fusion type is unsupported"));
-        break;
     }
   }
 };
@@ -339,16 +339,10 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
         errors::Unimplemented("FusedConv2D for GPU is not currently supported "
                               "without cudnn"));
 
-    bool is_supported_activation =
-        fusion == FusedComputationType::kBiasAddWithRelu ||
-        fusion == FusedComputationType::kBiasAddWithRelu6 ||
-        fusion == FusedComputationType::kBiasAddWithElu ||
-        fusion == FusedComputationType::kBiasAddWithLeakyRelu;
     OP_REQUIRES(
-        context, is_supported_activation,
+        context, fusion == FusedComputationType::kBiasAddWithRelu,
         errors::Unimplemented("FusedConv2D implementation only supports "
-                              "fusing with `BiasAdd + Relu|Relu6|Elu|LeakyRlue`"
-                              " for now."));
+                              "fusing with `BiasAdd + Relu` for now."));
 
     Tensor input = input_param;
 
@@ -463,15 +457,6 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
       case FusedComputationType::kBiasAddWithRelu:
         dnn_activation_mode = se::dnn::ActivationMode::kRelu;
         break;
-      case FusedComputationType::kBiasAddWithRelu6:
-        dnn_activation_mode = se::dnn::ActivationMode::kRelu6;
-        break;
-      case FusedComputationType::kBiasAddWithElu:
-        dnn_activation_mode = se::dnn::ActivationMode::kElu;
-        break;
-      case FusedComputationType::kBiasAddWithLeakyRelu:
-        dnn_activation_mode = se::dnn::ActivationMode::kLeakyRelu;
-        break;
       default:
         LOG(FATAL) << "Unsupported fusion type";  // Crash OK
     }
@@ -579,7 +564,6 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
 
     constexpr double kConvScale = 1.0;
     constexpr double kSideInputScale = 0.0;
-    double leakyrelu_alpha = fusion_args.leakyrelu_alpha;
 
     int device_id = stream->parent()->device_ordinal();
     DataType dtype = input.dtype();
@@ -602,7 +586,7 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
         dtype,                         // tensor datatype
         device_id,                     // device_id
         conv_desc.group_count(),
-        ConvParameters::FusionInfo{kConvScale, kSideInputScale, leakyrelu_alpha,
+        ConvParameters::FusionInfo{kConvScale, kSideInputScale,
                                    dnn_activation_mode,  // activation_mode
                                    /*is_contrib=*/false}};
 
@@ -612,8 +596,8 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
         cudnn_use_autotune, FusedConvAutotuneMap::GetInstance(),
         conv_parameters, context, input_desc, filter_desc, bias_desc,
         output_desc, conv_desc, dnn_activation_mode, kConvScale,
-        kSideInputScale, leakyrelu_alpha, input_ptr, filter_ptr, output_ptr,
-        bias_ptr, side_input_ptr, ConvolveScratchSize());
+        kSideInputScale, input_ptr, filter_ptr, output_ptr, bias_ptr,
+        side_input_ptr, ConvolveScratchSize());
     OP_REQUIRES_OK(context, entry_or.status());
     auto autotune_entry = std::move(entry_or).value();
 
@@ -627,7 +611,6 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
                                           element_type,
                                           kConvScale,
                                           kSideInputScale,
-                                          leakyrelu_alpha,
                                           input_desc,
                                           filter_desc,
                                           bias_desc,
@@ -636,14 +619,14 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
                                           dnn_activation_mode};
       auto primary_or = runners.primary->GetOrCreateRunner(config, stream);
       OP_REQUIRES_OK(context, primary_or.status());
-      auto* primary = primary_or.value();
+      auto* primary = primary_or.ValueOrDie();
 
       const se::dnn::FusedConvRunner* no_scratch_fallback = nullptr;
       if (runners.no_scratch_fallback) {
         auto no_scratch_fallback_or =
             runners.no_scratch_fallback->GetOrCreateRunner(config, stream);
         OP_REQUIRES_OK(context, no_scratch_fallback_or.status());
-        no_scratch_fallback = no_scratch_fallback_or.value();
+        no_scratch_fallback = no_scratch_fallback_or.ValueOrDie();
       }
 
       auto runner_and_scratch_or =
@@ -715,12 +698,7 @@ class FusedConv2DOp : public OpKernel {
     // convolution with BiasAdd, but in practice it doesn't work, cuDNN ignores
     // this parameter and always does Relu activation.
     if (std::is_same<Device, GPUDevice>::value) {
-      patterns = {
-          {FCT::kBiasAddWithRelu, {"BiasAdd", "Relu"}},
-          {FCT::kBiasAddWithRelu6, {"BiasAdd", "Relu6"}},
-          {FCT::kBiasAddWithElu, {"BiasAdd", "Elu"}},
-          {FCT::kBiasAddWithLeakyRelu, {"BiasAdd", "LeakyRelu"}},
-      };
+      patterns = {{FCT::kBiasAddWithRelu, {"BiasAdd", "Relu"}}};
     }
 
     OP_REQUIRES_OK(context, InitializeFusedComputation(

@@ -261,8 +261,7 @@ mlir::LogicalResult FallbackExecuteOpConversion::ConvertToFallbackExecuteOp(
     // be relatively cheap for the host.
     cost = rewriter.getI64IntegerAttr(kDefaultCheapCost);
   } else {
-    cost = rewriter.getI64IntegerAttr(
-        cost_analysis_.GetCost(op, fallback_key.getInt()));
+    cost = rewriter.getI64IntegerAttr(cost_analysis_.GetCost(op));
   }
 
   if (mlir::MemoryEffectOpInterface::hasNoEffect(op)) {
@@ -2118,7 +2117,7 @@ LogicalResult OutlineJitRtClustersPass::SetEntrypointConstraints(
     if (auto constraint = constraints.GetConstraint(func.getArgument(i))) {
       auto constraint_name = mlir::StringAttr::get(
           &getContext(), llvm::formatv("{0}", *constraint).str());
-      func.setArgAttr(i, "rt.constraint", constraint_name);
+      func.setArgAttr(i, "jitrt.constraint", constraint_name);
     }
   }
 

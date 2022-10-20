@@ -20,7 +20,6 @@ limitations under the License.
 
 #include "absl/base/casts.h"
 #include "absl/strings/substitute.h"
-#include "tensorflow/compiler/xla/util.h"
 
 namespace xla {
 

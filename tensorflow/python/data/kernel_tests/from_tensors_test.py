@@ -143,7 +143,7 @@ class FromTensorsTest(test_base.DatasetTestBase, parameterized.TestCase):
       self.skipTest("attr module is not available.")
 
     @attr.s
-    class Foo:
+    class Foo(object):
       x = attr.ib()
       y = attr.ib()
 

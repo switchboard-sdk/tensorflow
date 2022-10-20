@@ -33,7 +33,6 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "tensorflow/lite/builtin_ops.h"
 #include "tensorflow/lite/c/builtin_op_data.h"
-#include "tensorflow/lite/c/c_api_types.h"
 #include "tensorflow/lite/c/common.h"
 #include "tensorflow/lite/delegates/gpu/common/custom_parsers.h"
 #include "tensorflow/lite/delegates/gpu/common/data_type.h"
@@ -346,19 +345,9 @@ class CastOperationParser : public TFLiteOperationParser {
       RETURN_IF_ERROR(GetTensorInfo(context, tflite_node->inputs->data[0],
                                     &input_tensor_info));
       if (input_tensor_info.producers.size() != 1 ||
-          input_tensor_info.consumers.size() != 1) {
+          input_tensor_info.consumers.size() != 1 ||
+          !IsLogicalCode(input_tensor_info.producers[0].second->builtin_code)) {
         return absl::UnavailableError("Not supported cast case");
-      }
-      // If the cast is an output, do the cast to float on CPU.
-      TensorInfo output_tensor_info;
-      RETURN_IF_ERROR(GetTensorInfo(context, tflite_node->outputs->data[0],
-                                    &output_tensor_info));
-      if (output_tensor_info.consumers.size() != 1) {
-        return absl::UnavailableError(
-            "Cast from bool not supported for outputs");
-      }
-      if (IsLogicalCode(input_tensor_info.producers[0].second->builtin_code)) {
-        return absl::OkStatus();
       }
     }
     return CheckGpuDelegateCompatibility(context, tflite_node, registration);
@@ -1212,34 +1201,7 @@ class FullyConnectedOperationParser : public TFLiteOperationParser {
       node->operation.type = ToString(OperationType::CONVOLUTION_2D);
       RETURN_IF_ERROR(reader->AddInput(node, 0));
       RETURN_IF_ERROR(reader->AddInput(node, 1));
-
-      const TfLiteTensor* input_tensor = reader->GetInputTensor(0);
-      BHWC input_shape;
-      RETURN_IF_ERROR(ExtractTensorShape(*input_tensor, &input_shape));
-      const TfLiteTensor* input2_tensor = reader->GetInputTensor(1);
-      BHWC input2_shape;
-      RETURN_IF_ERROR(ExtractTensorShape(*input2_tensor, &input2_shape));
-      const TfLiteTensor* output_tensor = reader->GetOutputTensor(0);
-      BHWC output_shape;
-      RETURN_IF_ERROR(ExtractTensorShape(*output_tensor, &output_shape));
-      BHWC output_ref_shape = input_shape;
-      output_ref_shape.c = input2_shape.b;
-      if (output_ref_shape != output_shape) {
-        Value* copy_value = graph->NewValue();
-        auto input_value = graph->FindInputs(node->id)[0];
-        copy_value->tensor.type = input_value->tensor.type;
-        copy_value->tensor.shape = output_ref_shape;
-        Node* node_reshape = graph->NewNode();
-        node_reshape->operation.type = ToString(OperationType::RESHAPE);
-        ReshapeAttributes reshape_attr;
-        reshape_attr.new_shape = output_shape;
-        node_reshape->operation.attributes = reshape_attr;
-        RETURN_IF_ERROR(graph->SetProducer(node->id, copy_value->id));
-        RETURN_IF_ERROR(graph->AddConsumer(node_reshape->id, copy_value->id));
-        RETURN_IF_ERROR(reader->AddOutputs(node_reshape));
-      } else {
-        RETURN_IF_ERROR(reader->AddOutputs(node));
-      }
+      RETURN_IF_ERROR(reader->AddOutputs(node));
 
       Convolution2DAttributes attr;
       reader->ReadTensor(2, &attr.bias).IgnoreError();  // bias is optional
@@ -1263,33 +1225,37 @@ class FullyConnectedOperationParser : public TFLiteOperationParser {
 
     FullyConnectedAttributes attr;
     RETURN_IF_ERROR(GetFullyConnectedAttributes(1, 2, reader, &attr));
+    const int weights_width = attr.weights.shape.i;
 
     auto input = graph->FindInputs(node->id)[0];
-    if (input->tensor.shape.c != attr.weights.shape.i) {
+    int batch_size = input->tensor.shape.b;
+    if (input->tensor.shape.DimensionsProduct() / batch_size != weights_width) {
       return absl::UnimplementedError(
-          "Amount of input channels should match weights width");
+          "Amount of input data should match weights width");
     }
 
     Node* conv = node;
     if (input->tensor.shape.h != 1 || input->tensor.shape.w != 1) {
-      // In Gpu delegates assume that height and width = 1 for FullyConnected
-      // Using usual convolution2d when height or width != 1
-      Convolution2DAttributes conv_attr;
-      conv_attr.strides = HW(1, 1);
-      conv_attr.dilations = HW(1, 1);
-      conv_attr.padding.appended = HW(0, 0);
-      conv_attr.padding.prepended = HW(0, 0);
-      conv_attr.weights = attr.weights;
-      conv_attr.bias = attr.bias;
-      conv->operation.type = ToString(OperationType::CONVOLUTION_2D);
-      conv->operation.attributes = std::move(conv_attr);
-    } else {
-      conv->operation.type = ToString(OperationType::FULLY_CONNECTED);
-      conv->operation.attributes = std::move(attr);
+      auto& reshape = node;
+      conv = graph->NewNode();  // reset conv pointer!
+      Value* reshaped_value = graph->NewValue();
+      reshaped_value->tensor.type = DataType::FLOAT32;
+      reshaped_value->tensor.shape =
+          BHWC(input->tensor.shape.b, 1, 1, weights_width);
+      RETURN_IF_ERROR(graph->SetProducer(reshape->id, reshaped_value->id));
+      reshape->operation.type = ToString(OperationType::RESHAPE);
+      ReshapeAttributes attr;
+      attr.new_shape = reshaped_value->tensor.shape;
+      reshape->operation.attributes = attr;
+      RETURN_IF_ERROR(graph->AddConsumer(conv->id, reshaped_value->id));
     }
-    RETURN_IF_ERROR(reader->AddOutputs(conv));
+
+    conv->operation.type = ToString(OperationType::FULLY_CONNECTED);
+    conv->operation.attributes = std::move(attr);
+    absl::Status result = reader->AddOutputs(conv);
     RETURN_IF_ERROR(MaybeFuseActivation(tf_options->activation, graph, conv));
-    return absl::OkStatus();
+
+    return result;
   }
 };
 
@@ -3165,13 +3131,9 @@ TfLiteIntArray* GetOpsToReplace(
       allowed_in_types.push_back(kTfLiteInt32);
       allowed_out_types.push_back(kTfLiteFloat32);
       allowed_out_types.push_back(kTfLiteInt32);
-      allowed_out_types.push_back(kTfLiteBool);
     }
     if (registration->builtin_code == kTfLiteBuiltinOneHot) {
       allowed_in_types.push_back(kTfLiteInt32);
-    }
-    if (registration->builtin_code == kTfLiteBuiltinSelectV2) {
-      allowed_in_types.push_back(kTfLiteBool);
     }
     if (!IsAllAllowedTensors(context, node->inputs, allowed_in_types) ||
         !IsAllAllowedTensors(context, node->outputs, allowed_out_types)) {

@@ -312,16 +312,12 @@ class Node {
   void record_buffer_event(int64_t bytes_delta, int64_t elements_delta) {
     buffered_bytes_ += bytes_delta;
     buffered_elements_ += elements_delta;
-    // There is no need to maintain watermarks for synchronous ops because we
-    // will not upsize or downsize the buffers of synchronous ops.
-    if (IsAsync()) {
-      int64_t low_watermark =
-          std::min(buffered_elements_low_, buffered_elements_);
-      buffered_elements_low_ = low_watermark;
-      int64_t high_watermark =
-          std::max(buffered_elements_high_, buffered_elements_);
-      buffered_elements_high_ = high_watermark;
-    }
+    int64_t low_watermark =
+        std::min(buffered_elements_low_, buffered_elements_);
+    buffered_elements_low_ = low_watermark;
+    int64_t high_watermark =
+        std::max(buffered_elements_high_, buffered_elements_);
+    buffered_elements_high_ = high_watermark;
   }
 
   // Records that the node produced an element.
@@ -365,11 +361,8 @@ class Node {
     autotune_.store(autotune);
   }
 
-  // Resets buffer watermarks to the current buffered elements.
+  // Resets buffer watermarks to the current buffer size.
   void ResetBufferWatermarks() {
-    if (!IsAsync()) {
-      return;
-    }
     int64_t current_buffer_size = buffered_elements_;
     buffered_elements_low_ = current_buffer_size;
     buffered_elements_high_ = current_buffer_size;
@@ -480,9 +473,8 @@ class Node {
                           bool collect_node(const std::shared_ptr<Node>)) const
       TF_LOCKS_EXCLUDED(mu_);
 
-  // Downsizes buffer parameters of this node. Returns true if any buffer is
-  // downsized.
-  bool TryDownsizeBuffer();
+  // Downsizes buffer parameters of this node.
+  void TryDownsizeBuffer();
 
   // Collects buffer parameters of this node that should be upsized.
   void CollectBufferParametersToUpsize(
@@ -812,8 +804,7 @@ class Model {
 
   // Optimizes buffers in the pipeline rooted at `snapshot`. It downsizes
   // buffers that are too large and upsizes buffers that are too small while
-  // respecting the ram budget. If any node is downsized or upsized, the
-  // watermarks of all nodes are reset to the buffered elements.
+  // respecting the ram budget.
   void OptimizeBuffers(std::shared_ptr<Node> snapshot, int64_t ram_budget);
 
   // Collects the output time and if `gradients` is not `nullptr`, the output
@@ -863,17 +854,12 @@ class Model {
   // a vector which contains pairs of node names and tunable parameters.
   ModelParameters CollectTunableParameters(std::shared_ptr<Node> node);
 
-  // Downsizes buffers that are too large for all nodes rooted at `snapshot`.
-  // Returns true if any buffer is downsized.
-  bool DownsizeBuffers(std::shared_ptr<Node> snapshot);
+  // Downsizes buffers that are too large for all nodes rooted at `snapshot.
+  void DownsizeBuffers(std::shared_ptr<Node> snapshot);
 
   // Upsizes buffers that are too small for all nodes rooted at `snapshot` while
-  // respecting the ram budget. Returns true if any buffer is upsized.
-  bool UpsizeBuffers(std::shared_ptr<Node> snapshot, int64_t ram_budget);
-
-  // Reset buffer watermarks of all asynchronous nodes to their buffered
-  // elements.
-  void ResetBufferWatermarks();
+  // respecting the ram budget.
+  void UpsizeBuffers(std::shared_ptr<Node> snapshot, int64_t ram_budget);
 
   // Collects buffer parameters of all nodes in the model that should be
   // upsized.

@@ -60,7 +60,7 @@ TEST(EvalUtilsTest, InvalidInputs) {
   auto cpu_device = std::make_unique<util::SimpleDevice>();
   auto resource_mgr = std::make_unique<tensorflow::ResourceMgr>();
 
-  llvm::SmallVector<TypedAttr> result;
+  llvm::SmallVector<Attribute> result;
 
   // The operand 1 of SwitchOp is not scalar.
   EXPECT_TRUE(failed(
@@ -96,7 +96,7 @@ TEST(EvalUtilsTest, EvaluateOperation) {
   auto cpu_device = std::make_unique<util::SimpleDevice>();
   auto resource_mgr = std::make_unique<tensorflow::ResourceMgr>();
 
-  llvm::SmallVector<TypedAttr> result;
+  llvm::SmallVector<Attribute> result;
 
   ASSERT_TRUE(succeeded(util::EvaluateOperation(
       cpu_device.get(), resource_mgr.get(), const_0,
@@ -159,7 +159,7 @@ TEST(EvalUtilsTest, OutputInvalidation) {
   auto cpu_device = std::make_unique<util::SimpleDevice>();
   auto resource_mgr = std::make_unique<tensorflow::ResourceMgr>();
 
-  llvm::SmallVector<TypedAttr> result;
+  llvm::SmallVector<Attribute> result;
 
   ASSERT_TRUE(succeeded(
       util::EvaluateOperation(cpu_device.get(), resource_mgr.get(), switch_op,

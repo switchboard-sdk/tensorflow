@@ -51,7 +51,7 @@ void BufferMap::SetFromTfLite(int tensor_index, const TfLiteTensor* tensor,
   TFLITE_CHECK(
       SetTfTensorFromTfLite(tensor, &id_to_tensor_[tensor_index], allow_reusing)
           .ok());
-  if (tflite::IsResourceOrVariant(tensor)) {
+  if (IsResourceOrVariant(tensor)) {
     owned_by_tf_.insert(tensor_index);
     return;
   }

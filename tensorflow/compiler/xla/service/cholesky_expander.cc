@@ -224,7 +224,7 @@ StatusOr<HloInstruction*> CholeskyExpander::ExpandInstruction(
       "xla.cholesky_%s_%s", instruction->operand(0)->shape().ToString(),
       options.lower() ? "lower" : "upper");
 
-  HloModule* module = instruction->GetModule();
+  HloModule* module = instruction->parent()->parent();
 
   HloComputation*& computation =
       computation_cache_.emplace(name, nullptr).first->second;

@@ -58,91 +58,79 @@ class WeakrefDeletionObserver:
 class InternalTracingContext(trace.TracingContext):
   """Container for variables and flags shared across TraceType generation."""
 
-  def __init__(self, is_legacy_signature: bool = False):
+  def __init__(self):
     self._deletion_observer = WeakrefDeletionObserver()
     self._global_to_local_id = {}
-    self._is_legacy_signature = is_legacy_signature
 
   # TODO(b/202772221): Consider dropping after alias pattern matching is
   # supported.
   def make_reference_type(self, base_type: trace.TraceType,
-                          global_id: Hashable) -> trace.TraceType:
-    if global_id not in self._global_to_local_id:
-      self._global_to_local_id[global_id] = len(self._global_to_local_id)
+                          local_id: Hashable) -> trace.TraceType:
+    if local_id not in self._global_to_local_id:
+      self._global_to_local_id[local_id] = len(self._global_to_local_id)
 
     return default_types.Reference(base_type,
-                                   self._global_to_local_id[global_id])
+                                   self._global_to_local_id[local_id])
 
   @property
-  def deletion_observer(self) -> WeakrefDeletionObserver:
+  def deletion_observer(self):
     """Returns a functor which invalidates the current key when called."""
     return self._deletion_observer
 
-  @property
-  def is_legacy_signature(self) -> bool:
-    """If the value is from a legacy signature representation.
 
-    Legacy signature representations include tf.function.input_signature and
-    ConcreteFunction.structured_input_signature.
-    """
-    return self._is_legacy_signature
-
-
-def from_value(value: Any,
-               context: trace.TracingContext = None) -> trace.TraceType:
-  """Returns a TraceType corresponding to the value based on the context.
+def from_object(obj: Any,
+                context: trace.TracingContext = None) -> trace.TraceType:
+  """Returns a TraceType corresponding to the object based on the context.
 
   Args:
-    value: The value to generate a TraceType for.
+    obj: The object to generate a TraceType for.
     context: The TracingContext to be shared during protocol calls.
 
   Returns:
-    A TraceType object representing the given value.
+    A TraceType object representing the given object.
   """
 
   if context is None:
     context = InternalTracingContext()
 
-  if context.is_legacy_signature and isinstance(value, trace.TraceType):
-    return value
-  elif isinstance(value, trace.SupportsTracingProtocol):
-    return value.__tf_tracing_type__(context)
+  if isinstance(obj, trace.SupportsTracingProtocol):
+    return obj.__tf_tracing_type__(context)
 
-  if hasattr(value, "__wrapped__"):
-    return from_value(value.__wrapped__, context)
+  if hasattr(obj, "__wrapped__"):
+    return from_object(obj.__wrapped__, context)
 
-  if isinstance(value, list):
-    return default_types.List(*(from_value(c, context) for c in value))
+  if isinstance(obj, list):
+    return default_types.List(*(from_object(c, context) for c in obj))
 
-  if isinstance(value, tuple):
-    if util.is_namedtuple(value):
-      named_tuple_type = type(value)
+  if isinstance(obj, tuple):
+    if util.is_namedtuple(obj):
+      named_tuple_type = type(obj)
       return default_types.NamedTuple.from_type_and_attributes(
-          named_tuple_type, tuple(from_value(c, context) for c in value))
+          named_tuple_type, tuple(from_object(c, context) for c in obj))
     else:
-      return default_types.Tuple(*(from_value(c, context) for c in value))
+      return default_types.Tuple(*(from_object(c, context) for c in obj))
 
-  if isinstance(value, collections.abc.Mapping):
-    return default_types.Dict({k: from_value(value[k], context) for k in value})
+  if isinstance(obj, collections.abc.Mapping):
+    return default_types.Dict({k: from_object(obj[k], context) for k in obj})
 
-  if util.is_attrs(value):
+  if util.is_attrs(obj):
     return default_types.Attrs.from_type_and_attributes(
-        type(value),
+        type(obj),
         tuple(
-            from_value(getattr(value, a.name), context)
-            for a in value.__attrs_attrs__))
+            from_object(getattr(obj, a.name), context)
+            for a in obj.__attrs_attrs__))
 
   try:
-    ref = weakref.ref(value, context.deletion_observer)
+    ref = weakref.ref(obj, context.deletion_observer)
     if ref is None:
       raise TypeError(
-          f"Deleted objects are not valid tf.function arguments, Got {value!r}")
+          f"Deleted objects are not valid tf.function arguments, Got {obj!r}")
     else:
       return default_types.Weakref(ref)
   except TypeError:
     try:
-      return default_types.Literal(value)
+      return default_types.Literal(obj)
     except:
       raise TypeError(
           f"Python object could not be represented through the generic tracing "
-          f"type. Consider implementing the Tracing Protocol for it: {value!r}")
+          f"type. Consider implementing the Tracing Protocol for it: {obj!r}")

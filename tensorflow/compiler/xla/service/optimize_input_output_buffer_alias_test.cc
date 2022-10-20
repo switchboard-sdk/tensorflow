@@ -55,7 +55,7 @@ class OptimizeInputOutputBufferAliasTest : public HloTestBase {
     auto changed = optimize_pass_->Build(input_shape, output_shape, &config_);
     TF_CHECK_OK(changed.status());
 
-    return changed.value();
+    return changed.ValueOrDie();
   }
 
   std::unique_ptr<OptimizeInputOutputBufferAlias> optimize_pass_;

@@ -125,7 +125,7 @@ ClientLibrary::~ClientLibrary() = default;
 /* static */ LocalClient* ClientLibrary::LocalClientOrDie() {
   auto client_status = GetOrCreateLocalClient();
   TF_CHECK_OK(client_status.status());
-  return client_status.value();
+  return client_status.ValueOrDie();
 }
 
 /* static */ LocalService* ClientLibrary::GetXlaService(

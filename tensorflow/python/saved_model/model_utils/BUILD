@@ -48,6 +48,7 @@ py_strict_library(
         "//tensorflow/python:framework_ops",
         "//tensorflow/python:tensor_util",
         "//tensorflow/python/saved_model:signature_def_utils",
+        "@six_archive//:six",
     ],
 )
 
@@ -88,6 +89,7 @@ py_strict_library(
         "//tensorflow/python/saved_model:signature_def_utils",
         "//tensorflow/python/saved_model:tag_constants",
         "//tensorflow/python/saved_model:utils",
+        "@six_archive//:six",
     ],
 )
 

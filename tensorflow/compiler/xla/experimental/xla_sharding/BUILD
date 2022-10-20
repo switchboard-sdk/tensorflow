@@ -1,7 +1,10 @@
 # Description:
 #   Python API for shardings in XLA.
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//tensorflow:internal"],
+    licenses = ["notice"],
+)
 
 py_library(
     name = "xla_sharding",

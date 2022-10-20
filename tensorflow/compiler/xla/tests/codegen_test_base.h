@@ -30,8 +30,7 @@ class CodegenTestBase : public HloTestBase {
  protected:
   // Compiles hlo_module with the JIT compiler.
   StatusOr<std::unique_ptr<Executable>> CompileToExecutable(
-      std::unique_ptr<HloModule> hlo_module,
-      bool run_optimization_passes = true);
+      std::unique_ptr<HloModule> hlo_module);
 
   // Compiles hlo_module with the AOT compiler.
   StatusOr<std::unique_ptr<AotCompilationResult>> CompileToAotCompilationResult(

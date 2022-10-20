@@ -131,6 +131,7 @@ py_library(
         "//tensorflow/lite/python:test_util",
         "//tensorflow/python:graph_util",
         "//third_party/py/numpy",
+        "@six_archive//:six",
     ],
 )
 
@@ -183,6 +184,7 @@ py_binary(
         ":zip_test_utils",
         "//tensorflow:tensorflow_py",
         "//third_party/py/numpy",
+        "@six_archive//:six",
     ],
 )
 
@@ -476,10 +478,10 @@ cc_library(
             "//tensorflow/core:lib",
         ],
         "//tensorflow:android": [
-            "//tensorflow/core:portable_tensorflow_lib_lite",
+            "//tensorflow/core:portable_tensorflow_lib",
         ],
         "//tensorflow:ios": [
-            "//tensorflow/core:portable_tensorflow_lib_lite",
+            "//tensorflow/core:portable_tensorflow_lib",
         ],
     }),
 )

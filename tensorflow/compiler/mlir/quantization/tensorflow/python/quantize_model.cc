@@ -37,8 +37,6 @@ limitations under the License.
 #include "tensorflow/cc/saved_model/loader.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/passes/passes.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/quantization_options.pb.h"
-#include "tensorflow/compiler/mlir/quantization/tensorflow/quantize_passes.h"
-#include "tensorflow/compiler/mlir/quantization/tensorflow/quantize_preprocess.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_dialect.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_saved_model.h"
 #include "tensorflow/compiler/mlir/tensorflow/transforms/passes.h"
@@ -57,11 +55,41 @@ namespace quantization {
 namespace internal {
 namespace {
 
-void AddExportPasses(mlir::PassManager &pm) {
-  pm.addPass(mlir::quant::CreateInsertMainFunctionPass());
-  pm.addNestedPass<mlir::func::FuncOp>(
-      mlir::CreateFunctionalToExecutorDialectConversionPass());
-  pm.addPass(mlir::CreateBreakUpIslandsPass());
+Status PreprocessAndFreezeGraph(mlir::ModuleOp module,
+                                mlir::MLIRContext* context,
+                                llvm::Optional<Session*> session) {
+  mlir::PassManager pm_before_freezing_variables(context);
+  mlir::StatusScopedDiagnosticHandler statusHandler(module.getContext(),
+                                                    /*propagate=*/true);
+
+  mlir::TF::StandardPipelineOptions standard_pipeline_options;
+  standard_pipeline_options.enable_inliner = false;
+  standard_pipeline_options.form_clusters = false;
+  mlir::TF::CreateTFStandardPipeline(pm_before_freezing_variables,
+                                     standard_pipeline_options);
+
+  pm_before_freezing_variables.addNestedPass<mlir::func::FuncOp>(
+      mlir::TFDevice::CreateDecomposeResourceOpsPass());
+
+  mlir::PassManager pm_after_freezing_variables(context);
+  pm_after_freezing_variables.addPass(mlir::TF::CreateTFShapeInferencePass());
+  pm_after_freezing_variables.addPass(mlir::createCanonicalizerPass());
+  pm_after_freezing_variables.addPass(mlir::createInlinerPass());
+
+  if (failed(pm_before_freezing_variables.run(module))) {
+    return statusHandler.ConsumeStatus();
+  }
+
+  if (session.has_value() && failed(mlir::tf_saved_model::FreezeVariables(
+                                 module, session.getValue()))) {
+    return statusHandler.ConsumeStatus();
+  }
+
+  if (failed(pm_after_freezing_variables.run(module))) {
+    return statusHandler.ConsumeStatus();
+  }
+
+  return OkStatus();
 }
 
 // Converts MLIR ModuleOp to TensorFlow GraphDef. Returns InternalError status
@@ -80,18 +108,16 @@ absl::StatusOr<GraphDef> ConvertMlirModuleToGraphDef(
 
 }  // namespace
 
-absl::StatusOr<GraphDef> QuantizeQatModel(
+absl::StatusOr<GraphDef> QuantizeQATModel(
     const absl::string_view saved_model_path,
     const absl::string_view exported_names_str, const absl::string_view tags,
-    const absl::string_view quant_opts_serialized) {
+    const std::string& quant_opts_serialized) {
   const std::unordered_set<std::string> tag_set =
       absl::StrSplit(tags, ',', absl::SkipEmpty());
-  std::vector<std::string> exported_names =
+  std::vector<std::string> exported_names_vec =
       absl::StrSplit(exported_names_str, ',', absl::SkipEmpty());
   QuantizationOptions quantization_options;
-  if (!quantization_options.ParseFromString(
-          // NOLINTNEXTLINE: std::string conversion required.
-          std::string(quant_opts_serialized))) {
+  if (!quantization_options.ParseFromString(quant_opts_serialized)) {
     return absl::InternalError(
         "Failed to parse QuantizationOptions from string.");
   }
@@ -110,10 +136,10 @@ absl::StatusOr<GraphDef> QuantizeQatModel(
 
   // TODO(b/213406917): Add support for the object graph based saved model input
   StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> module =
-      SavedModelSignatureDefsToMlirImport(saved_model_path, tag_set,
-                                          absl::MakeSpan(exported_names),
-                                          &context, import_options,
-                                          /*lift_variables=*/false, &bundle);
+      SavedModelSignatureDefsToMlirImport(
+          saved_model_path, tag_set,
+          absl::Span<std::string>(exported_names_vec), &context, import_options,
+          /*lift_variables=*/false, &bundle);
 
   if (!module.status().ok()) {
     return absl::InternalError("Failed to import SavedModel: " +
@@ -131,8 +157,39 @@ absl::StatusOr<GraphDef> QuantizeQatModel(
 
   mlir::PassManager pm(&context);
 
-  AddQuantizeQatPasses(pm, quantization_options);
-  AddExportPasses(pm);
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::quant::CreateConvertFakeQuantToQdqPass());
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::TF::CreateUnrollBatchMatMulPassPass());
+  // TODO(b/229995333): Add PrepareLiftingPass for QAT. In QAT, AffineOps are
+  // connected to FakeQuantOp instead of the ConstOp so need to add separate
+  // pattern for FakeQuantOp.
+  // pm.addNestedPass<mlir::func::FuncOp>(mlir::quant::CreatePrepareLiftingPass());
+  pm.addPass(mlir::quant::CreateLiftQuantizableSpotsAsFunctionsPass());
+  pm.addPass(mlir::quant::CreateInsertQuantizedFunctionsPass(
+      mlir::quant::QuantizationMethod::kQuantizationAwareTraining,
+      quantization_options.op_set()));
+  pm.addPass(mlir::quant::CreateQuantizeCompositeFunctionsPass(
+      mlir::quant::QuantizationMethod::kQuantizationAwareTraining));
+  pm.addPass(mlir::createSymbolDCEPass());
+  pm.addPass(mlir::TF::CreateTFShapeInferencePass());
+
+  // For XLA opset, the graph is inlined to take benefit of constant folding
+  // and the TF Conv/Matmul ops with cast-hack are converted to XLA ops.
+  if (quantization_options.op_set() == OpSet::XLA) {
+    pm.addPass(mlir::createInlinerPass());
+    pm.addPass(mlir::TF::CreateTFShapeInferencePass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::quant::CreateReplaceCastHacksWithTFXLAOpsPass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+  }
+  pm.addNestedPass<mlir::func::FuncOp>(mlir::quant::CreateOptimizePass());
+
+  pm.addPass(mlir::quant::CreateInsertMainFunctionPass());
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::CreateFunctionalToExecutorDialectConversionPass());
+  pm.addPass(mlir::CreateBreakUpIslandsPass());
 
   mlir::StatusScopedDiagnosticHandler diagnostic_handler(&context);
   if (failed(pm.run(*module_ref))) {
@@ -144,12 +201,12 @@ absl::StatusOr<GraphDef> QuantizeQatModel(
   return ConvertMlirModuleToGraphDef(*module_ref);
 }
 
-absl::StatusOr<GraphDef> QuantizePtqModelPreCalibration(
+absl::StatusOr<GraphDef> QuantizePTQModelPreCalibration(
     const absl::string_view saved_model_path,
     const absl::string_view exported_names_str, const absl::string_view tags) {
   const std::unordered_set<std::string> tag_set =
       absl::StrSplit(tags, ',', absl::SkipEmpty());
-  std::vector<std::string> exported_names =
+  std::vector<std::string> exported_names_vec =
       absl::StrSplit(exported_names_str, ',', absl::SkipEmpty());
 
   // Convert the SavedModelBundle to an MLIR module.
@@ -166,10 +223,10 @@ absl::StatusOr<GraphDef> QuantizePtqModelPreCalibration(
 
   // TODO(b/213406917): Add support for the object graph based saved model input
   StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> module =
-      SavedModelSignatureDefsToMlirImport(saved_model_path, tag_set,
-                                          absl::MakeSpan(exported_names),
-                                          &context, import_options,
-                                          /*lift_variables=*/false, &bundle);
+      SavedModelSignatureDefsToMlirImport(
+          saved_model_path, tag_set,
+          absl::Span<std::string>(exported_names_vec), &context, import_options,
+          /*lift_variables=*/false, &bundle);
 
   if (!module.status().ok()) {
     return absl::InternalError("Failed to import SavedModel: " +
@@ -185,9 +242,17 @@ absl::StatusOr<GraphDef> QuantizePtqModelPreCalibration(
   }
 
   mlir::PassManager pm(&context);
-
-  AddQuantizePtqPreCalibrationPasses(pm);
-  AddExportPasses(pm);
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::TF::CreateUnrollBatchMatMulPassPass());
+  pm.addNestedPass<mlir::func::FuncOp>(mlir::quant::CreatePrepareLiftingPass());
+  pm.addPass(mlir::quant::CreateLiftQuantizableSpotsAsFunctionsPass());
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::quant::CreateInsertCustomAggregationOpsPass());
+  pm.addPass(mlir::quant::CreateIssueIDsOfCustomAggregationOpsPass());
+  pm.addPass(mlir::quant::CreateInsertMainFunctionPass());
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::CreateFunctionalToExecutorDialectConversionPass());
+  pm.addPass(mlir::CreateBreakUpIslandsPass());
 
   mlir::StatusScopedDiagnosticHandler diagnostic_handler(&context);
   if (failed(pm.run(*module_ref))) {
@@ -199,18 +264,16 @@ absl::StatusOr<GraphDef> QuantizePtqModelPreCalibration(
   return ConvertMlirModuleToGraphDef(*module_ref);
 }
 
-absl::StatusOr<GraphDef> QuantizePtqModelPostCalibration(
+absl::StatusOr<GraphDef> QuantizePTQModelPostCalibration(
     const absl::string_view saved_model_path,
     const absl::string_view exported_names_str, const absl::string_view tags,
-    const absl::string_view quant_opts_serialized) {
+    const std::string& quant_opts_serialized) {
   const std::unordered_set<std::string> tag_set =
       absl::StrSplit(tags, ',', absl::SkipEmpty());
-  std::vector<std::string> exported_names =
+  std::vector<std::string> exported_names_vec =
       absl::StrSplit(exported_names_str, ',', absl::SkipEmpty());
   QuantizationOptions quantization_options;
-  if (!quantization_options.ParseFromString(
-          // NOLINTNEXTLINE: std::string conversion required.
-          std::string(quant_opts_serialized))) {
+  if (!quantization_options.ParseFromString(quant_opts_serialized)) {
     return absl::InternalError(
         "Failed to parse QuantizationOptions from string.");
   }
@@ -229,10 +292,10 @@ absl::StatusOr<GraphDef> QuantizePtqModelPostCalibration(
 
   // TODO(b/213406917): Add support for the object graph based saved model input
   StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> module =
-      SavedModelSignatureDefsToMlirImport(saved_model_path, tag_set,
-                                          absl::MakeSpan(exported_names),
-                                          &context, import_options,
-                                          /*lift_variables=*/true, &bundle);
+      SavedModelSignatureDefsToMlirImport(
+          saved_model_path, tag_set,
+          absl::Span<std::string>(exported_names_vec), &context, import_options,
+          /*lift_variables=*/true, &bundle);
 
   if (!module.status().ok()) {
     return absl::InternalError("Failed to import SavedModel: " +
@@ -243,8 +306,33 @@ absl::StatusOr<GraphDef> QuantizePtqModelPostCalibration(
 
   mlir::PassManager pm(&context);
 
-  AddQuantizePtqPostCalibrationPasses(pm, quantization_options);
-  AddExportPasses(pm);
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::quant::CreateConvertCustomAggregationOpToQuantStatsPass());
+  pm.addPass(mlir::quant::CreateInsertQuantizedFunctionsPass(
+      mlir::quant::QuantizationMethod::kPostTrainingQuantization,
+      quantization_options.op_set()));
+  pm.addPass(mlir::quant::CreateQuantizeCompositeFunctionsPass(
+      mlir::quant::QuantizationMethod::kPostTrainingQuantization));
+  pm.addPass(mlir::createSymbolDCEPass());
+  pm.addPass(mlir::TF::CreateTFShapeInferencePass());
+
+  // For XLA opset, the graph is inlined to take benefit of constant folding
+  // and the TF Conv/Matmul ops with cast-hack are converted to XLA ops.
+  if (quantization_options.op_set() == OpSet::XLA) {
+    pm.addPass(mlir::createInlinerPass());
+    pm.addPass(mlir::TF::CreateTFShapeInferencePass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::quant::CreateReplaceCastHacksWithTFXLAOpsPass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+  }
+  pm.addNestedPass<mlir::func::FuncOp>(mlir::quant::CreateOptimizePass());
+
+  pm.addPass(mlir::quant::CreateInsertMainFunctionPass());
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::CreateFunctionalToExecutorDialectConversionPass());
+  pm.addPass(mlir::CreateBreakUpIslandsPass());
 
   mlir::StatusScopedDiagnosticHandler diagnostic_handler(&context);
   if (failed(pm.run(*module_ref))) {
@@ -256,18 +344,16 @@ absl::StatusOr<GraphDef> QuantizePtqModelPostCalibration(
   return ConvertMlirModuleToGraphDef(*module_ref);
 }
 
-absl::StatusOr<GraphDef> QuantizePtqDynamicRange(
+absl::StatusOr<GraphDef> QuantizePTQDynamicRange(
     const absl::string_view saved_model_path,
     const absl::string_view exported_names_str, const absl::string_view tags,
-    const absl::string_view quant_opts_serialized) {
+    const std::string& quant_opts_serialized) {
   const std::unordered_set<std::string> tag_set =
       absl::StrSplit(tags, ',', absl::SkipEmpty());
-  std::vector<std::string> exported_names =
+  std::vector<std::string> exported_names_vec =
       absl::StrSplit(exported_names_str, ',', absl::SkipEmpty());
   QuantizationOptions quantization_options;
-  if (!quantization_options.ParseFromString(
-          // NOLINTNEXTLINE: std::string conversion required.
-          std::string(quant_opts_serialized))) {
+  if (!quantization_options.ParseFromString(quant_opts_serialized)) {
     return absl::InternalError(
         "Failed to parse QuantizationOptions from string.");
   }
@@ -286,10 +372,10 @@ absl::StatusOr<GraphDef> QuantizePtqDynamicRange(
 
   // TODO(b/213406917): Add support for the object graph based saved model input
   StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> module =
-      SavedModelSignatureDefsToMlirImport(saved_model_path, tag_set,
-                                          absl::MakeSpan(exported_names),
-                                          &context, import_options,
-                                          /*lift_variables=*/false, &bundle);
+      SavedModelSignatureDefsToMlirImport(
+          saved_model_path, tag_set,
+          absl::Span<std::string>(exported_names_vec), &context, import_options,
+          /*lift_variables=*/false, &bundle);
 
   if (!module.status().ok()) {
     return absl::InternalError("Failed to import SavedModel: " +
@@ -307,8 +393,21 @@ absl::StatusOr<GraphDef> QuantizePtqDynamicRange(
 
   mlir::PassManager pm(&context);
 
-  AddQuantizePtqDynamicRangePasses(pm, quantization_options);
-  AddExportPasses(pm);
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::TF::CreateUnrollBatchMatMulPassPass());
+  pm.addNestedPass<mlir::func::FuncOp>(mlir::quant::CreatePrepareLiftingPass());
+  pm.addPass(mlir::quant::CreateLiftQuantizableSpotsAsFunctionsDRQPass());
+  pm.addPass(mlir::quant::CreateInsertQuantizedFunctionsPass(
+      mlir::quant::QuantizationMethod::kDynamicRangeQuantization,
+      quantization_options.op_set()));
+  pm.addPass(mlir::quant::CreateQuantizeCompositeFunctionsPass(
+      mlir::quant::QuantizationMethod::kDynamicRangeQuantization));
+  pm.addPass(mlir::createSymbolDCEPass());
+  pm.addPass(mlir::TF::CreateTFShapeInferencePass());
+  pm.addPass(mlir::quant::CreateInsertMainFunctionPass());
+  pm.addNestedPass<mlir::func::FuncOp>(
+      mlir::CreateFunctionalToExecutorDialectConversionPass());
+  pm.addPass(mlir::CreateBreakUpIslandsPass());
 
   mlir::StatusScopedDiagnosticHandler diagnostic_handler(&context);
   if (failed(pm.run(*module_ref))) {

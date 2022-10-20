@@ -14,7 +14,7 @@ limitations under the License.
 ==============================================================================*/
 /// \file
 /// Main abstraction controlling the tflite interpreter.
-/// See c/common.h for the API for defining operations (TfLiteRegistration).
+/// See context.h for the API for defining operations (TfLiteRegistration).
 #ifndef TENSORFLOW_LITE_INTERPRETER_H_
 #define TENSORFLOW_LITE_INTERPRETER_H_
 
@@ -41,6 +41,7 @@ limitations under the License.
 #include "tensorflow/lite/external_cpu_backend_context.h"
 #include "tensorflow/lite/internal/signature_def.h"
 #include "tensorflow/lite/interpreter_options.h"
+#include "tensorflow/lite/memory_planner.h"
 #include "tensorflow/lite/portable_type_to_tflitetype.h"
 #include "tensorflow/lite/profiling/root_profiler.h"
 #include "tensorflow/lite/signature_runner.h"
@@ -725,11 +726,12 @@ class Interpreter {
   const Subgraph& primary_subgraph() const {
     return *subgraphs_.front();  // Safe as subgraphs_ always has 1 entry.
   }
-#endif  // DOXYGEN_SKIP
 
   /// WARNING: Experimental interface, subject to change
-  /// Get the error reporter associated with this interpreter.
+  // Get the error reporter associated with this interpreter.
   ErrorReporter* error_reporter() const { return error_reporter_; }
+
+#endif  // DOXYGEN_SKIP
 
  private:
   friend class InterpreterBuilder;

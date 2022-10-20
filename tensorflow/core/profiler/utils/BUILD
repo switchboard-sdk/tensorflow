@@ -1,7 +1,7 @@
 load("//tensorflow/core/platform:build_config_root.bzl", "if_static")
 load("//tensorflow/core/platform:rules_cc.bzl", "cc_library")
 load("//tensorflow:tensorflow.bzl", "tf_cc_test")
-load("//tensorflow/core/profiler/builds:build_config.bzl", "tf_profiler_copts", "tf_profiler_xla_proto_header")
+load("//tensorflow/core/profiler/builds:build_config.bzl", "tf_profiler_copts")
 
 package(
     default_visibility = ["//tensorflow/core/profiler:internal"],
@@ -427,7 +427,6 @@ cc_library(
         ":tf_op_utils",
         ":tf_xplane_visitor",
         ":timespan",
-        ":tpu_xplane_utils",
         ":trace_utils",
         ":xplane_builder",
         ":xplane_schema",
@@ -638,14 +637,15 @@ cc_library(
         ":xplane_schema",
         ":xplane_utils",
         ":xplane_visitor",
+        "//tensorflow/compiler/xla/service:hlo_proto_cc",
+        "//tensorflow/core/profiler/convert:xla_op_utils",
+        "//tensorflow/core/profiler/protobuf:xplane_proto_cc",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "//tensorflow/core/profiler/convert:xla_op_utils",
-        "//tensorflow/core/profiler/protobuf:xplane_proto_cc",
-    ] + tf_profiler_xla_proto_header(),
+    ],
 )
 
 tf_cc_test(

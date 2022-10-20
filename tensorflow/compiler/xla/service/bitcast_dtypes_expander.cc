@@ -59,7 +59,7 @@ StatusOr<HloInstruction*> BitcastDtypesExpander::ExpandInstruction(
 
   // Note: we are duplicating a hack from `cholesky_expander` to build a
   // computation using XlaBuilder.
-  HloModule* module = instruction->GetModule();
+  HloModule* module = instruction->parent()->parent();
   HloComputation*& computation =
       computation_cache_.emplace(name, nullptr).first->second;
   if (!computation) {

@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import numpy
 
@@ -24,7 +24,6 @@ from .xla_extension import ops as ops
 from .xla_extension import profiler as profiler
 
 from .xla_extension import Buffer as Buffer
-from .xla_extension import ShardedBuffer as ShardedBuffer
 from .xla_extension import Client as Client
 from .xla_extension import CompileOptions as CompileOptions
 from .xla_extension import Device as Device
@@ -36,7 +35,6 @@ from .xla_extension import FftType as FftType
 from .xla_extension import Frame as Frame
 from .xla_extension import HostBufferSemantics as HostBufferSemantics
 from .xla_extension import OpSharding as OpSharding
-from .xla_extension import HloSharding as HloSharding
 from .xla_extension import PrimitiveType as PrimitiveType
 from .xla_extension import Traceback as Traceback
 from .xla_extension import XlaBuilder as XlaBuilder
@@ -80,10 +78,6 @@ def make_gpu_client(
 
 
 def make_interpreter_client() -> Client:
-  ...
-
-
-def make_tfrt_tpu_c_api_client() -> Client:
   ...
 
 
@@ -185,7 +179,4 @@ class ReplicaGroup:
 
 def make_replica_groups(
     replica_groups: Optional[Sequence[Sequence[int]]]) -> List[ReplicaGroup]:
-  ...
-
-def weakref_lru_cache(cache_context_fn: Callable, call: Callable, maxsize=...):
   ...

@@ -62,9 +62,8 @@ struct ArenaAllocWithUsageInterval {
 // zero-sized allocations are explicitly allowed, and will resolve to null.
 class SimpleMemoryArena {
  public:
-  explicit SimpleMemoryArena(size_t arena_alignment, int subgraph_index = 0)
-      : subgraph_index_(subgraph_index),
-        committed_(false),
+  explicit SimpleMemoryArena(size_t arena_alignment)
+      : committed_(false),
         arena_alignment_(arena_alignment),
         high_water_mark_(0),
         underlying_buffer_size_(0),
@@ -125,9 +124,6 @@ class SimpleMemoryArena {
   // at each op etc.
   void DumpDebugInfo(const std::string& name,
                      const std::vector<int>& execution_plan) const;
-
- protected:
-  int subgraph_index_;
 
  private:
   bool committed_;

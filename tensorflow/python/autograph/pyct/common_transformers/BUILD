@@ -23,7 +23,10 @@ py_library(
     ],
     srcs_version = "PY3",
     visibility = ["//visibility:public"],
-    deps = ["@gast_archive//:gast"],
+    deps = [
+        "@gast_archive//:gast",
+        "@six_archive//:six",
+    ],
 )
 
 py_test(

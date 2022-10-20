@@ -24,8 +24,6 @@ limitations under the License.
 #include <unordered_map>
 #include <utility>
 
-#include "absl/status/status.h"
-#include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "tensorflow/core/platform/logging.h"
@@ -36,8 +34,9 @@ limitations under the License.
 
 namespace tensorflow {
 
-#if TF_HAS_CPP_ATTRIBUTE(nodiscard)
-class [[nodiscard]] Status;
+#if defined(__clang__)
+// Only clang supports warn_unused_result as a type annotation.
+class TF_MUST_USE_RESULT Status;
 #endif
 
 #if ABSL_HAVE_BUILTIN(__builtin_LINE) && ABSL_HAVE_BUILTIN(__builtin_FILE)
@@ -78,7 +77,6 @@ class Status {
  public:
   /// Create a success status.
   Status() {}
-  ~Status();  // Not inlined to save code space
 
   /// \brief Create a status with the specified error code and msg as a
   /// human-readable string containing more detailed information.
@@ -174,7 +172,8 @@ class Status {
   //
   // Returns the payload of a status given its unique `type_url` key, if
   // present.
-  absl::optional<absl::Cord> GetPayload(absl::string_view type_url) const;
+  absl::optional<absl::string_view> GetPayload(
+      absl::string_view type_url) const;
 
   // Sets the payload for a non-ok status using a `type_url` key, overwriting
   // any existing payload for that `type_url`.
@@ -196,13 +195,7 @@ class Status {
       const std::function<void(absl::string_view, absl::string_view)>& visitor)
       const;
 
-  // Sets the stack frame associated with this status object.
-  // Stack traces are only kept and returned via GetStackTrace() if
-  // !this->ok().
   void SetStackTrace(std::vector<StackFrame>);
-
-  // Retrieve an associated stack frame for a non-OK status that was
-  // set via SetStackTrace().
   std::vector<StackFrame> GetStackTrace() const;
 
   absl::Span<const SourceLocation> GetSourceLocations() const;
@@ -211,17 +204,12 @@ class Status {
   void MaybeAddSourceLocation(SourceLocation loc);
 
   static const std::string& empty_string();
+  std::vector<StackFrame> stack_trace_;
   struct State {
-    State() TF_ATTRIBUTE_NOINLINE = default;
-    ~State() TF_ATTRIBUTE_NOINLINE = default;
-    State(const State&) TF_ATTRIBUTE_NOINLINE = default;
-    State& operator=(const State&) TF_ATTRIBUTE_NOINLINE = default;
-
     tensorflow::error::Code code;
     std::string msg;
     std::unordered_map<std::string, std::string> payloads;
     absl::InlinedVector<SourceLocation, 4> source_locations;
-    std::vector<StackFrame> stack_trace;
   };
 
   // OK status has a `NULL` state_.  Otherwise, `state_` points to
@@ -229,7 +217,6 @@ class Status {
   std::unique_ptr<State> state_;
 
   void SlowCopyFrom(const State* src);
-  State* NewStateFromNonOKStatus(const Status& s);
 };
 
 // OkStatus()
@@ -237,9 +224,6 @@ class Status {
 // Returns an OK status, equivalent to a default constructed instance. Prefer
 // usage of `OkStatus()` when constructing such an OK status.
 Status OkStatus();
-
-Status FromAbslStatus(const absl::Status& s);
-absl::Status ToAbslStatus(const ::tensorflow::Status& s);
 
 // TODO(b/197552541) Move this namespace to errors.h.
 namespace errors {
@@ -308,7 +292,7 @@ class StatusGroup {
 };
 
 inline Status::Status(const Status& s)
-    : state_((s.state_ == nullptr) ? nullptr : NewStateFromNonOKStatus(s)) {}
+    : state_((s.state_ == nullptr) ? nullptr : new State(*s.state_)) {}
 
 inline Status& Status::operator=(const Status& s) {
   // The following condition catches both aliasing (when this == &s),

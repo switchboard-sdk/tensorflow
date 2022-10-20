@@ -23,6 +23,8 @@ from collections import abc
 import os
 import time
 
+import six
+
 from tensorflow.python.checkpoint import checkpoint_management
 from tensorflow.python.distribute import distribution_strategy_context
 from tensorflow.python.framework import ops
@@ -357,7 +359,7 @@ def _init_from_checkpoint(ckpt_dir_or_file, assignment_map):
   reader = load_checkpoint(ckpt_dir_or_file)
   variable_map = reader.get_variable_to_shape_map()
   if isinstance(assignment_map, abc.Mapping):
-    assignment_map = assignment_map.items()
+    assignment_map = six.iteritems(assignment_map)
 
   # We only want to sort by tensor names.
   sort_key = lambda pair: pair[0]

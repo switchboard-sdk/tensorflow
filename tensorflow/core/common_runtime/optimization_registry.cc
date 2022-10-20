@@ -52,7 +52,7 @@ Status OptimizationPassRegistry::RunGrouping(
   };
 
   VLOG(1) << "Starting optimization of a group " << grouping;
-  if (VLOG_IS_ON(3)) {
+  if (VLOG_IS_ON(2)) {
     std::string prefix = strings::StrCat("before_grouping_", grouping);
     dump_graph(prefix);
   }
@@ -85,8 +85,7 @@ Status OptimizationPassRegistry::RunGrouping(
     group_timings.ReportAndStop();
   }
   VLOG(1) << "Finished optimization of a group " << grouping;
-  if (VLOG_IS_ON(3) ||
-      (VLOG_IS_ON(2) && grouping == Grouping::POST_REWRITE_FOR_EXEC)) {
+  if (VLOG_IS_ON(2)) {
     std::string prefix = strings::StrCat("after_grouping_", grouping);
     dump_graph(prefix);
   }

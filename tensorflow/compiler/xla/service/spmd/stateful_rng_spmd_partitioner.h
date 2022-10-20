@@ -63,9 +63,6 @@ class StatefulRngSpmdPartitioner : public spmd::SpmdPartitioner {
   static spmd::SpmdPartitionerOptions GetSpmdPartitionerOptions() {
     spmd::SpmdPartitionerOptions options;
     options.allow_module_signature_change = true;
-    // Setting windowed einsum threshold to be large to disable it for GPU by
-    // default.
-    options.threshold_for_windowed_einsum_mib = 100000;
     return options;
   }
 };

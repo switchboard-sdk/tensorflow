@@ -129,6 +129,8 @@ const HostEventTypeMap& GetHostEventTypeMap() {
       {"ASBSQueue::Schedule", kASBSQueueSchedule},
       // TFRT related.
       {"TfrtModelRun", kTfrtModelRun},
+      // JAX related.
+      {"LocalExecutable::ExecuteOnLocalDevices", kExecuteOnLocalDevices},
       // GPU related.
       {"KernelLaunch", kKernelLaunch},
       {"KernelExecute", kKernelExecute},
@@ -374,8 +376,6 @@ bool IsInternalStat(absl::optional<int64_t> stat_type) {
     case StatType::kIsRoot:
     case StatType::kFlops:
     case StatType::kBytesAccessed:
-    case StatType::kProgramId:
-    case StatType::kSymbolId:
       return true;
     default:
       return false;

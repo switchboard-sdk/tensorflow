@@ -22,7 +22,6 @@ limitations under the License.
 #include "mlir/IR/Builders.h"  // from @llvm-project
 #include "mlir/IR/BuiltinTypes.h"  // from @llvm-project
 #include "mlir/IR/Types.h"  // from @llvm-project
-#include "tensorflow/compiler/xla/stream_executor/lib/statusor.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
@@ -36,6 +35,7 @@ limitations under the License.
 #include "tensorflow/core/platform/errors.h"
 #include "tensorflow/core/platform/protobuf.h"
 #include "tensorflow/core/platform/tstring.h"
+#include "tensorflow/stream_executor/lib/statusor.h"
 
 namespace mlir {
 namespace tfg {
@@ -111,7 +111,8 @@ tensorflow::StatusOr<ElementsAttr> ConvertStringTensor(
 }
 
 tensorflow::StatusOr<ElementsAttr> ConvertTensor(const Tensor& input_tensor,
-                                                 Builder builder) {
+                                                 Builder builder,
+                                                 TFGraphDialect* tfgDialect) {
   const auto& input_dtype = input_tensor.dtype();
   const auto& input_shape = input_tensor.shape();
   Type elt_type;
@@ -151,8 +152,8 @@ tensorflow::StatusOr<ElementsAttr> ConvertTensor(const Tensor& input_tensor,
     default:
       // TODO(shpeisman): restructure code to reuse dialect pointer across
       // calls.
-      return ElementsAttr(
-          tf_type::TensorProtoAttr::get(type, MangleTensor(input_tensor)));
+      return ElementsAttr(OpaqueElementsAttr::get(tfgDialect, type,
+                                                  MangleTensor(input_tensor)));
   }
 
 #undef CONVERT_FLAT
@@ -200,7 +201,8 @@ static int NumberOfMaterializedElements(const TensorProto& tensor) {
 }
 
 tensorflow::StatusOr<ElementsAttr> ConvertTensorProto(
-    const TensorProto& input_tensor, Builder builder) {
+    const TensorProto& input_tensor, Builder builder,
+    TFGraphDialect* tfgDialect) {
   // If there is only one actual element in the proto, but its shape would
   // indicate there are more values, then this is representing a splat tensor.
   // We can create an MLIR Attribute more efficiently in this case.
@@ -218,7 +220,7 @@ tensorflow::StatusOr<ElementsAttr> ConvertTensorProto(
     shape->add_dim()->set_size(1);
 
     TF_ASSIGN_OR_RETURN(ElementsAttr single_attr,
-                        ConvertTensorProto(tensor_copy, builder));
+                        ConvertTensorProto(tensor_copy, builder, tfgDialect));
 
     std::vector<int64_t> original_dimensions;
     for (auto dim : input_tensor_shape) original_dimensions.push_back(dim.size);
@@ -232,7 +234,7 @@ tensorflow::StatusOr<ElementsAttr> ConvertTensorProto(
     return InvalidArgument("Failed to parse input_tensor: ",
                            input_tensor.DebugString());
   }
-  return ConvertTensor(t, builder);
+  return ConvertTensor(t, builder, tfgDialect);
 }
 
 void ConvertToTensorShapeProto(ArrayRef<int64_t> shape,
@@ -303,12 +305,15 @@ void ConvertComplexElementsAttr(const DenseElementsAttr attr,
   }
 }
 
-// Converts an Tensor proto attribute to a TensorFlow tensor proto.
-Status ConvertTensorProtoAttr(const mlir::tf_type::TensorProtoAttr attr,
-                              TensorProto* output_tensor) {
-  auto mangled_tensor = attr.getValue();
-  absl::string_view tensor_view(mangled_tensor.data(), mangled_tensor.size());
-  return mangling_util::DemangleTensor(tensor_view, output_tensor);
+// Converts an MLIR opaque elements attribute to a TensorFlow tensor proto.
+Status ConvertOpaqueElementsAttr(const ElementsAttr attr,
+                                 TensorProto* output_tensor) {
+  if (attr.isa<OpaqueElementsAttr>()) {
+    auto mangled_tensor = attr.cast<OpaqueElementsAttr>().getValue();
+    absl::string_view tensor_view(mangled_tensor.data(), mangled_tensor.size());
+    return mangling_util::DemangleTensor(tensor_view, output_tensor);
+  }
+  return InvalidArgument("Unexpected elements attribute type from MLIR.");
 }
 
 template <typename T>
@@ -398,8 +403,8 @@ Status ConvertToTensorProto(const ElementsAttr attr, TensorProto* output) {
   output->set_dtype(output_dtype);
   ConvertToTensorShapeProto(shape, output->mutable_tensor_shape());
 
-  if (auto tensor_attr = attr.dyn_cast<mlir::tf_type::TensorProtoAttr>())
-    return ConvertTensorProtoAttr(tensor_attr, output);
+  if (attr.isa<OpaqueElementsAttr>())
+    return ConvertOpaqueElementsAttr(attr.cast<OpaqueElementsAttr>(), output);
 
   auto dense_attr = attr.dyn_cast<DenseElementsAttr>();
   if (!dense_attr) return InvalidArgument("Unsupported elements attr");

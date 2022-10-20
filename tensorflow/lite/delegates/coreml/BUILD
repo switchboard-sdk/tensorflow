@@ -28,8 +28,8 @@ objc_library(
     copts = ["-std=c++17"],
     features = ["-layering_check"],
     sdk_frameworks = [
-        "CoreML",
         "Foundation",
+        "CoreML",
     ],
     deps = [":mlmodel_proto_cc"],
 )

@@ -23,6 +23,6 @@ include "tensorflow/compiler/mlir/tensorflow/ir/tf_ops.td"
 // Converts reamaining arith.constant ops from quantization passes back to
 // tf.Const ops.
 def ConvertArithConstToTfConst : Pat<
-  (Arith_ConstantOp:$res DenseElementsAttr:$value),
+  (Arith_ConstantOp:$res NonOpaqueElementsAttr:$value),
   (TF_ConstOp $value),
   [(AnyStaticShapeTensor $res)], (addBenefit 20)>;

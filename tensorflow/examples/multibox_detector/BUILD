@@ -3,7 +3,10 @@
 
 load("//tensorflow:tensorflow.bzl", "tf_cc_binary")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//tensorflow:internal"],
+    licenses = ["notice"],
+)
 
 tf_cc_binary(
     name = "detect_objects",

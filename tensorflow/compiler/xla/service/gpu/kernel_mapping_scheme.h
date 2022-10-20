@@ -76,9 +76,7 @@ class TilingScheme {
                          absl::StrJoin(num_threads_, ", ")),
          absl::StrFormat("indexing_order = %s",
                          IndexingOrderToString(indexing_order_)),
-         absl::StrFormat("vector_size = %d", vector_size_),
-         absl::StrFormat("thread_id_virtual_scaling = %d",
-                         thread_id_virtual_scaling_)},
+         absl::StrFormat("vector_size = %d", vector_size_)},
         ", ");
   }
 

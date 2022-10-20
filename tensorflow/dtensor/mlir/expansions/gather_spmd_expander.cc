@@ -104,8 +104,9 @@ StatusOr<mlir::Operation*> GatherV2SPMDExpander::ExpandOp(mlir::Operation* op) {
 
     if (!Layout::IsUnshardedDimension(params_layout->sharding_spec(axis))) {
       TF_ASSIGN_OR_RETURN(
-          params, EmitAllGather(builder, params, *params_layout,
-                                Layout::FromProto(tgt_params_layout).value()));
+          params,
+          EmitAllGather(builder, params, *params_layout,
+                        Layout::FromProto(tgt_params_layout).ValueOrDie()));
     }
   }
 
@@ -148,8 +149,9 @@ StatusOr<mlir::Operation*> GatherV2SPMDExpander::ExpandOp(mlir::Operation* op) {
 
     if (indices_relayout_needed) {
       TF_ASSIGN_OR_RETURN(
-          indices, EmitRelayout(indices, *indices_layout,
-                                Layout::FromProto(tgt_indices_layout).value()));
+          indices,
+          EmitRelayout(indices, *indices_layout,
+                       Layout::FromProto(tgt_indices_layout).ValueOrDie()));
     }
   }
 

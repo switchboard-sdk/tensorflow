@@ -23,7 +23,6 @@ limitations under the License.
 #include <functional>
 #include <initializer_list>
 #include <optional>
-#include <ostream>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -35,6 +34,10 @@ limitations under the License.
 #include "tensorflow/compiler/xla/layout_util.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 #include "tensorflow/compiler/xla/shape.h"
+#include "tensorflow/compiler/xla/status_macros.h"
+#include "tensorflow/compiler/xla/statusor.h"
+#include "tensorflow/compiler/xla/types.h"
+#include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/core/lib/core/threadpool.h"
 #include "tensorflow/core/platform/cpu_info.h"
@@ -347,13 +350,12 @@ class ShapeUtil {
 
   // Constructs a new shape with the given minor_to_major order in its Layout.
   // Returns a value shape such that shape.has_layout().
-  static Shape MakeShapeWithLayout(
-      PrimitiveType element_type, absl::Span<const int64_t> dimensions,
-      absl::Span<const int64_t> minor_to_major,
-      absl::Span<const DimLevelType> dim_level_types = {},
-      absl::Span<const Tile> tiles = {}, int64_t element_size_in_bits = 0,
-      int64_t memory_space = 0,
-      std::optional<Shape> physical_shape = std::nullopt);
+  static Shape MakeShapeWithLayout(PrimitiveType element_type,
+                                   absl::Span<const int64_t> dimensions,
+                                   absl::Span<const int64_t> minor_to_major,
+                                   absl::Span<const Tile> tiles = {},
+                                   int64_t element_size_in_bits = 0,
+                                   int64_t memory_space = 0);
 
   // Constructs a new shape with the given dimension `dim` as the most major
   // dimension in the layout. If the shape does not have a layout, assumes a
@@ -570,8 +572,8 @@ class ShapeUtil {
                                  const Shape& output_shape,
                                  absl::Span<const int64_t> dimension_mapping);
 
-  // Returns whether a reshape from `input_shape` to `output_shape` is a
-  // bitcast, when minor_to_major in layout is considered.
+  // Returns whether a reshape from "input_shape" to "output_shape" is a
+  // bitcast.
   //
   // Precondition: Both input_shape and output_shape have explicit layouts.
   static bool ReshapeIsBitcast(const Shape& input_shape,
@@ -729,8 +731,8 @@ class ShapeUtil {
   //
   // If `b` is a 0-2-1 transpose of `a` in 0-1-2, return the dimensions for the
   // normalized shape of `b` or the 0-2-1 shape.
-  static std::optional<Vector3> FindTranspose021(const Shape& input_shape,
-                                                 const Shape& output_shape);
+  static std::optional<Vector3> FindTranspose021(const Shape& a,
+                                                 const Shape& b);
 
   // Strips device-specific information, namely tiling and memory-space
   // information, from a shape.

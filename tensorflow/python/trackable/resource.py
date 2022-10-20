@@ -18,6 +18,8 @@ import contextlib
 import copy
 import weakref
 
+import six
+
 from tensorflow.python.eager import context
 from tensorflow.python.eager import def_function
 from tensorflow.python.framework import ops
@@ -29,7 +31,7 @@ from tensorflow.python.util.tf_export import tf_export
 _RESOURCE_TRACKER_STACK = []
 
 
-class ResourceTracker:
+class ResourceTracker(object):
   """An object that tracks a list of resources."""
 
   __slots__ = ["_resources"]
@@ -102,7 +104,8 @@ class _ResourceMetaclass(type):
     return previous_getter(*args, **kwargs)
 
 
-class CapturableResource(base.Trackable, metaclass=_ResourceMetaclass):
+class CapturableResource(six.with_metaclass(_ResourceMetaclass,
+                                            base.Trackable)):
   """Holds a Tensor which a tf.function can capture.
 
   `CapturableResource`s are discovered by traversing the graph of object
@@ -281,7 +284,7 @@ class TrackableResource(CapturableResource):
     global _RESOURCE_TRACKER_STACK
     for resource_tracker in _RESOURCE_TRACKER_STACK:
       resource_tracker.add_resource(self)
-    super().__init__(device=device)
+    super(TrackableResource, self).__init__(device=device)
 
 
 # TODO(b/124205571,b/124092991): Solve destruction of resources.
@@ -289,7 +292,7 @@ class RestoredResource(TrackableResource):
   """Restored SavedResource."""
 
   def __init__(self, device=""):
-    super().__init__(device=device)
+    super(RestoredResource, self).__init__(device=device)
 
   @classmethod
   def _deserialize_from_proto(cls, object_proto, dependencies, **unused_kwargs):

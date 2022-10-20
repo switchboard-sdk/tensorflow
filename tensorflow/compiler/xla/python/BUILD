@@ -16,16 +16,11 @@ load("//tensorflow:tensorflow.bzl", "pybind_extension")
 load("//tensorflow:tensorflow.bzl", "pytype_library")
 
 package(
-    default_visibility = [":friends"],
-    licenses = ["notice"],
-)
-
-package_group(
-    name = "friends",
-    includes = [
+    default_visibility = [
+        "//learning/pathways/data_parallel/jax:__subpackages__",
         "//tensorflow:internal",
-        "//tensorflow/compiler/xla:friends",
     ],
+    licenses = ["notice"],
 )
 
 pytype_library(
@@ -65,7 +60,6 @@ py_library(
     testonly = 1,
     srcs = ["xla_client_test.py"],
     srcs_version = "PY3",
-    visibility = [":friends"],
     deps = [
         ":xla_client",
         "@absl_py//absl/flags",
@@ -158,7 +152,6 @@ cc_library(
         "-fno-strict-aliasing",
     ],
     features = ["-use_header_modules"],
-    visibility = [":friends"],
     deps = [
         ":exceptions",
         ":status_casters",
@@ -188,7 +181,6 @@ cc_library(
         "-fno-strict-aliasing",
     ],
     features = ["-use_header_modules"],
-    visibility = [":friends"],
     deps = [
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:inlined_vector",
@@ -224,7 +216,6 @@ cc_library(
         "-fno-strict-aliasing",
     ],
     features = ["-use_header_modules"],
-    visibility = [":friends"],
     deps = [
         ":exceptions",
         ":python_ref_manager",
@@ -525,7 +516,6 @@ cc_library(
         "-fno-strict-aliasing",
     ],
     features = ["-use_header_modules"],
-    visibility = [":friends"],
     deps = [
         ":exceptions",
         "//tensorflow/core/platform:logging",
@@ -533,6 +523,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@pybind11",
@@ -552,11 +543,10 @@ cc_library(
     features = ["-use_header_modules"],
     deps = [
         ":types",
+        "//tensorflow/compiler/mlir/hlo",
         "//tensorflow/compiler/mlir/xla:hlo_to_mlir_hlo",
         "//tensorflow/compiler/xla:status",
         "//tensorflow/compiler/xla/client:xla_computation",
-        "//tensorflow/compiler/xla/mlir_hlo",
-        "//tensorflow/compiler/xla/mlir_hlo/stablehlo:chlo_ops",
         "//tensorflow/compiler/xla/pjrt:mlir_to_hlo",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:FuncDialect",
@@ -601,7 +591,6 @@ cc_library(
         "-fno-strict-aliasing",
     ],
     features = ["-use_header_modules"],
-    visibility = [":friends"],
     deps = [
         "//tensorflow/compiler/xla:status",
         "//tensorflow/compiler/xla:util",
@@ -622,25 +611,6 @@ cc_library(
     features = ["-use_header_modules"],
     deps = [
         "@com_google_absl//absl/strings:str_format",
-        "@pybind11",
-    ],
-)
-
-cc_library(
-    name = "weakref_lru_cache",
-    srcs = ["weakref_lru_cache.cc"],
-    hdrs = ["weakref_lru_cache.h"],
-    compatible_with = [],
-    copts = [
-        "-fexceptions",
-        "-fno-strict-aliasing",
-    ],
-    features = ["-use_header_modules"],
-    visibility = ["//visibility:private"],
-    deps = [
-        "//tensorflow/compiler/xla/pjrt:lru_cache",
-        "@com_google_absl//absl/cleanup",
-        "@com_google_absl//absl/synchronization",
         "@pybind11",
     ],
 )
@@ -739,7 +709,6 @@ pybind_extension(
                ":mlir",
                ":ops",
                ":pmap_lib",
-               ":weakref_lru_cache",
                ":pprof_profile_builder",
                ":profiler",
                ":transfer_guard_lib",
@@ -769,7 +738,6 @@ pybind_extension(
                "//tensorflow/compiler/xla/pjrt/distributed:client",
                "//tensorflow/compiler/xla/pjrt/distributed:service",
                "//tensorflow/core:lib",
-               "//tensorflow/compiler/xla/pjrt:pjrt_c_api_client",
                # Do NOT remove this dependency. The XLA Python extension must not
                # depend on any part of TensorFlow at runtime, **including**
                # libtensorflow_framework.so. The XLA module is deployed self-contained

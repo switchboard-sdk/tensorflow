@@ -22,6 +22,7 @@ import unittest
 import weakref
 
 from absl.testing import parameterized
+from six.moves import range
 
 from tensorflow.python.autograph.core import converter
 from tensorflow.python.checkpoint.checkpoint import Checkpoint
@@ -219,7 +220,7 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
 
   def testMethod(self):
 
-    class MyModel:
+    class MyModel(object):
 
       def __init__(self):
         self.var = None
@@ -448,22 +449,20 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
     m = MyModule()
     tf_func_dec = def_function.function(
         input_signature=(tensor_spec.TensorSpec([], dtypes.int32),))
-    at_declare_error_msg = 'TensorSpecs are still required.*arg2.*arg3'
-    at_call_error_msg = 'specifies 1 positional arguments, but got 3.'
-
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    error_msg = 'TensorSpecs are still required.*arg2.*arg3'
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(m.f1)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(m.f2)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_declare_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(m.f3)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(m.f4)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(m.f5)(1, 2, 3)
 
     self.assertEqual(tf_func_dec(m.f6)(1).numpy(), 5)
@@ -471,37 +470,36 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
   def testInputSignatureMissingTensorSpecsFunction(self):
     tf_func_dec = def_function.function(
         input_signature=(tensor_spec.TensorSpec([], dtypes.int32),))
-    at_dec_error_msg = 'TensorSpecs are still required.*arg2.*arg3'
-    at_call_error_msg = 'specifies 1 positional arguments, but got 3'
+    error_msg = 'TensorSpecs are still required.*arg2.*arg3'
     # pylint: disable=unused-argument
     def f1(arg1, arg2, arg3):
       pass
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(f1)(1, 2, 3)
 
     def f2(arg1, arg2, arg3, **kwargs):
       pass
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(f2)(1, 2, 3)
 
     def f3(arg1, arg2, arg3, arg4=4, **kwargs):
       pass
 
-    with self.assertRaisesRegex(TypeError, at_dec_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(f3)(1, 2, 3)
 
     def f4(arg1, arg2, arg3, *args):
       pass
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(f4)(1, 2, 3)
 
     def f5(arg1, arg2, arg3, *args, **kwargs):
       pass
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(f5)(1, 2, 3)
     # pyline: enable=unused-argument
 
@@ -512,21 +510,20 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
   def testInputSignatureMissingTensorSpecsLambdaFunction(self):
     tf_func_dec = def_function.function(
         input_signature=(tensor_spec.TensorSpec([], dtypes.int32),))
-    at_dec_error_msg = 'TensorSpecs are still required.*arg2.*arg3'
-    at_call_error_msg = 'specifies 1 positional arguments, but got 3.'
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    error_msg = 'TensorSpecs are still required.*arg2.*arg3'
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(lambda ar1, arg2, arg3: None)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(lambda arg1, arg2, arg3, **kwargs: None)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_dec_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(lambda arg1, arg2, arg3, arg4=4, **kwargs: None)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(lambda arg1, arg2, arg3, *args: None)(1, 2, 3)
 
-    with self.assertRaisesRegex(TypeError, at_call_error_msg):
+    with self.assertRaisesRegex(TypeError, error_msg):
       tf_func_dec(lambda arg1, arg2, arg3, *args, **kwargs: None)(1, 2, 3)
 
     self.assertEqual(
@@ -555,11 +552,11 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
       tf_func_dec(functools.partial(f, 1))(2, 3)
 
     with self.assertRaisesRegex(TypeError,
-                                'specifies 1 positional arguments, but got 3.'):
+                                'TensorSpecs are still required.*arg2.*arg3'):
       tf_func_dec(functools.partial(f, arg4=5))(1, 2, 3)
 
     with self.assertRaisesRegex(TypeError,
-                                'specifies 1 positional arguments, but got 2.'):
+                                'TensorSpecs are still required.*arg3'):
       tf_func_dec(functools.partial(f, 1, arg4=5))(2, 3)
 
     self.assertAllEqual(tf_func_dec(functools.partial(f, 1, 2, arg4=5))(3),
@@ -963,7 +960,7 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
 
     self.assertEqual(cloned_py_function, cloned._python_function)
     self.assertEqual(func._name, cloned._name)
-    self.assertEqual(input_signature, cloned.input_signature)
+    self.assertEqual(input_signature, cloned._input_signature)
     self.assertEqual(autograph, cloned._autograph)
     self.assertEqual(implements, cloned._implements)
     self.assertEqual(autograph_options, cloned._experimental_autograph_options)
@@ -1039,7 +1036,7 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
     cloned = pickle.loads(pickle.dumps(func))
 
     self.assertEqual(func._name, cloned._name)
-    self.assertEqual(input_signature, cloned.input_signature)
+    self.assertEqual(input_signature, cloned._input_signature)
     self.assertEqual(autograph, cloned._autograph)
     self.assertEqual(implements, cloned._implements)
     self.assertEqual(autograph_options, cloned._experimental_autograph_options)
@@ -1087,7 +1084,7 @@ class DefFunctionTest(test.TestCase, parameterized.TestCase):
     if sys.version_info[0] < 3:
       self.skipTest('self.assertLogs() call is not available in Python 2.')
 
-    class Foo:
+    class Foo(object):
 
       @def_function.function
       def f(self, x):

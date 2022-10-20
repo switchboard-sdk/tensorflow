@@ -30,7 +30,7 @@ limitations under the License.
 namespace tensorflow {
 namespace {
 
-#define GEN_PASS_DEF_FUSEFILLINTOTILEDREDUCTION
+#define GEN_PASS_CLASSES
 #include "tensorflow/compiler/mlir/tfrt/jit/transforms/tf_jitrt_passes.h.inc"
 
 using llvm::makeArrayRef;
@@ -243,7 +243,8 @@ struct FuseFillIntoTiledReductionPattern : public OpRewritePattern<GenericOp> {
 
     auto accumulator = rewriter.create<GenericOp>(
         tiled_op.getLoc(), partial_result.getType(),
-        makeArrayRef(partial_result), makeArrayRef((Value)extract_output_slice),
+        makeArrayRef(partial_result),
+        makeArrayRef(extract_output_slice.getResult()),
         makeArrayRef({id_map, id_map}), parallel_iter_types,
         [&](OpBuilder &b, Location nested_loc, ValueRange args) {
           BlockAndValueMapping bvm;
@@ -318,8 +319,7 @@ struct FuseFillIntoTiledReductionPattern : public OpRewritePattern<GenericOp> {
 };
 
 struct FuseFillIntoTiledReductionPass
-    : public impl::FuseFillIntoTiledReductionBase<
-          FuseFillIntoTiledReductionPass> {
+    : public FuseFillIntoTiledReductionBase<FuseFillIntoTiledReductionPass> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

@@ -127,6 +127,8 @@ enum HostEventType {
   kASBSQueueSchedule,
   // TFRT related.
   kTfrtModelRun,
+  // JAX related.
+  kExecuteOnLocalDevices,
   // GPU related.
   kKernelLaunch,
   kKernelExecute,

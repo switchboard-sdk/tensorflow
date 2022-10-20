@@ -38,7 +38,6 @@ limitations under the License.
 #include "mlir/Dialect/Affine/Analysis/LoopAnalysis.h"  // from @llvm-project
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"  // from @llvm-project
 #include "mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
-#include "mlir/Dialect/Quant/QuantOps.h"  // from @llvm-project
 #include "mlir/IR/Attributes.h"  // from @llvm-project
 #include "mlir/IR/Block.h"  // from @llvm-project
 #include "mlir/IR/BuiltinAttributes.h"  // from @llvm-project
@@ -246,12 +245,12 @@ struct ConvertConst : public OpConversionPattern<TF::ConstOp> {
   LogicalResult matchAndRewrite(
       TF::ConstOp op, OpAdaptor adaptor,
       ConversionPatternRewriter &rewriter) const override {
-    // Verify that the tensor proto contains tensor of type variant and scalar
-    // shape. The variant type should hold a TensorList.
-    auto proto_attr = op.value().dyn_cast<TF::TensorProtoAttr>();
-    if (!proto_attr) return failure();
+    // Verify that the opaque elements attribute contains tensor of type variant
+    // and scalar shape. The variant type should hold a TensorList.
+    auto opaque_attr = op.value().dyn_cast<OpaqueElementsAttr>();
+    if (!opaque_attr) return failure();
     tensorflow::Tensor tensor;
-    if (!tensorflow::ConvertToTensor(proto_attr, &tensor).ok())
+    if (!tensorflow::ConvertToTensor(opaque_attr, &tensor).ok())
       return failure();
     if (tensor.dtype() != tensorflow::DT_VARIANT) return failure();
     if (!tensorflow::TensorShapeUtils::IsScalar(tensor.shape()))
@@ -288,7 +287,7 @@ struct ConvertConst : public OpConversionPattern<TF::ConstOp> {
                                 tensorflow::TensorShape(result_shape));
       auto attr_or = tensorflow::ConvertTensor(tensor, &rewriter);
       if (!attr_or.ok()) return failure();
-      rewriter.replaceOpWithNewOp<TF::ConstOp>(op, attr_or.value());
+      rewriter.replaceOpWithNewOp<TF::ConstOp>(op, attr_or.ValueOrDie());
       return success();
     }
 
@@ -301,7 +300,7 @@ struct ConvertConst : public OpConversionPattern<TF::ConstOp> {
       auto attr_or = tensorflow::ConvertTensor(tensor, &rewriter);
       if (!attr_or.ok()) return failure();
 
-      auto value = rewriter.create<TF::ConstOp>(loc, attr_or.value());
+      auto value = rewriter.create<TF::ConstOp>(loc, attr_or.ValueOrDie());
       values.push_back(value);
     }
     rewriter.replaceOpWithNewOp<TF::PackOp>(

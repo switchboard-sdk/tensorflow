@@ -18,7 +18,6 @@ limitations under the License.
 #include <algorithm>
 #include <list>
 #include <memory>
-#include <vector>
 
 #include "tensorflow/compiler/xla/test.h"
 

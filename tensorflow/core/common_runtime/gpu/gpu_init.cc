@@ -39,7 +39,7 @@ se::Platform* GPUMachineManager() {
     return nullptr;
   }
 
-  return result.value();
+  return result.ValueOrDie();
 }
 
 string GpuPlatformName() {

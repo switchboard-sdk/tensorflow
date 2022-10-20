@@ -64,7 +64,7 @@ std::optional<int64_t> SelectDominantDevice(
 // Assigns all the instructions of a computation, to a given device.
 // This API does not recurse into called computations, and does not assign
 // instructions which already have sharding.
-void AssignComputationDevice(HloComputation* computation, int64_t device);
+Status AssignComputationDevice(HloComputation* computation, int64_t device);
 
 // Given an instruction container, returns the device which is most commonly
 // occurring among the instructions.
@@ -78,7 +78,7 @@ std::optional<int64_t> GetMostOccurringDevice(
 // This API does not recurse into called computations.
 // If no device exists that satisfies the condition, the returned optional will
 // hold no value.
-std::optional<int64_t> GetDominantDevice(
+StatusOr<std::optional<int64_t>> GetDominantDevice(
     absl::Span<HloComputation* const> computations, double dominant_factor);
 
 // Returns the HloSharding with the tile dimensions and tile assignment
@@ -165,11 +165,6 @@ std::optional<HloSharding> GatherOutputShardingFromDataOperand(
 std::optional<HloSharding> GatherDataOperandShardingFromOutput(
     const HloSharding& output_sharding, const HloInstruction& hlo);
 
-// Returns the slice size for a scatter with given operand and update shapes.
-std::vector<int64_t> GetScatterSliceSize(const Shape& operand_shape,
-                                         const Shape& update_shape,
-                                         const ScatterDimensionNumbers& dnums);
-
 // Returns an output sharding of scatter by passing through the update operand's
 // sharding.
 std::optional<HloSharding> ScatterOutputShardingFromUpdate(
@@ -180,14 +175,6 @@ std::optional<HloSharding> ScatterOutputShardingFromUpdate(
 std::optional<HloSharding> ScatterUpdateShardingFromOutput(
     const HloSharding& per_output_sharding,
     const HloScatterInstruction& scatter);
-
-// Returns an output sharding of gather or update operand sharding of scatter by
-// passing through the indices' sharding on index parallel dimensions.
-HloSharding GatherOutputOrScatterUpdateShardingFromIndicesParallelDimensions(
-    const HloSharding& indices_sharding,
-    const int64_t output_or_update_shape_rank,
-    absl::Span<const int64_t> indices_parallel_dims,
-    absl::Span<const int64_t> output_or_update_parallel_dims);
 
 // Returns an identity value and an HloOpcode for reduce computation of scatter
 // instruction.

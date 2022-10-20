@@ -22,7 +22,7 @@ package(
         "//tensorflow/core/tfrt/utils:__pkg__",
         # tensorflow/examples/custom_ops_doc/simple_hash_table uses map_util
         "//tensorflow/examples/custom_ops_doc/simple_hash_table:__pkg__",
-        "//tensorflow/compiler/xla/stream_executor:__subpackages__",
+        "//tensorflow/stream_executor:__subpackages__",
     ],
     licenses = ["notice"],
 )
@@ -47,9 +47,7 @@ cc_library(
 cc_library(
     name = "compactptrset",
     hdrs = ["compactptrset.h"],
-    deps = [
-        "//tensorflow/tsl/lib/gtl:compactptrset",
-    ],
+    deps = ["//tensorflow/core/lib/gtl:flatset"],
 )
 
 cc_library(
@@ -84,7 +82,8 @@ cc_library(
     name = "flatrep",
     hdrs = ["flatrep.h"],
     deps = [
-        "//tensorflow/tsl/lib/gtl:flatrep",
+        "//tensorflow/core/platform:prefetch",
+        "//tensorflow/core/platform:types",
     ],
 )
 
@@ -92,7 +91,10 @@ cc_library(
     name = "flatset",
     hdrs = ["flatset.h"],
     deps = [
-        "//tensorflow/tsl/lib/gtl:flatset",
+        "//tensorflow/core/lib/gtl:flatrep",
+        "//tensorflow/core/lib/hash",
+        "//tensorflow/core/platform:logging",
+        "//tensorflow/core/platform:types",
     ],
 )
 
@@ -102,7 +104,6 @@ cc_library(
     deps = [
         "//tensorflow/core/platform:macros",
         "//tensorflow/core/platform:types",
-        "//tensorflow/tsl/lib/gtl:inlined_vector",
         "@com_google_absl//absl/container:inlined_vector",
     ],
 )
@@ -111,16 +112,14 @@ cc_library(
     name = "int_type",
     hdrs = ["int_type.h"],
     deps = [
-        "//tensorflow/tsl/lib/gtl:int_type",
+        "//tensorflow/core/platform:macros",
+        "//tensorflow/core/platform:types",
     ],
 )
 
 cc_library(
     name = "iterator_range",
     hdrs = ["iterator_range.h"],
-    deps = [
-        "//tensorflow/tsl/lib/gtl:iterator_range",
-    ],
 )
 
 cc_library(
@@ -139,10 +138,6 @@ cc_library(
         "//tensorflow/core/lib/gtl/subtle:map_traits",
     ],
     hdrs = ["map_util.h"],
-    deps = [
-        "//tensorflow/core/platform:hash",  # TODO(dduneavy) examples/custom_ops_doc transitively depends on this
-        "//tensorflow/tsl/lib/gtl:map_util",
-    ],
 )
 
 cc_library(
@@ -175,7 +170,6 @@ filegroup(
         "iterator_range.h",
         "optional.h",
         "priority_queue_util.h",
-        "//tensorflow/tsl/lib/gtl:legacy_lib_gtl_headers",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -188,7 +182,6 @@ filegroup(
         "manual_constructor.h",
         "map_util.h",
         "top_n.h",
-        "//tensorflow/tsl/lib/gtl:legacy_lib_internal_public_gtl_headers",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -197,7 +190,6 @@ filegroup(
     name = "legacy_lib_test_internal_headers",
     srcs = [
         "manual_constructor.h",
-        "//tensorflow/tsl/lib/gtl:legacy_lib_test_internal_headers",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -206,7 +198,6 @@ filegroup(
     name = "legacy_android_gif_internal_headers",
     srcs = [
         "cleanup.h",
-        "//tensorflow/tsl/lib/gtl:legacy_android_gif_internal_headers",
     ],
     visibility = [
         "//tensorflow/core:__pkg__",
@@ -223,7 +214,6 @@ filegroup(
         "flatrep.h",
         "inlined_vector.h",
         "top_n.h",
-        "//tensorflow/tsl/lib/gtl:mobile_srcs_no_runtime",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -241,7 +231,6 @@ filegroup(
         "optional.h",
         "priority_queue_util.h",
         "//tensorflow/core/lib/gtl/subtle:map_traits",
-        "//tensorflow/tsl/lib/gtl:mobile_srcs_only_runtime",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -265,7 +254,6 @@ filegroup(
         "priority_queue_util.h",
         "top_n.h",
         "//tensorflow/core/lib/gtl/subtle:map_traits",
-        "//tensorflow/tsl/lib/gtl:legacy_lib_gtl_all_headers",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )
@@ -283,7 +271,6 @@ filegroup(
         "manual_constructor_test.cc",
         "map_util_test.cc",
         "top_n_test.cc",
-        "//tensorflow/tsl/lib/gtl:legacy_lib_gtl_tests",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )

@@ -53,7 +53,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/shape_layout.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/status_macros.h"
-#include "tensorflow/compiler/xla/stream_executor/device_memory_allocator.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
@@ -63,6 +62,7 @@ limitations under the License.
 #include "tensorflow/core/platform/protobuf.h"
 #include "tensorflow/core/platform/stream_executor_no_cuda.h"
 #include "tensorflow/core/util/ptr_util.h"
+#include "tensorflow/stream_executor/device_memory_allocator.h"
 
 namespace xla {
 namespace {
@@ -247,7 +247,7 @@ Service::ResolveAndValidateArguments(
           StrCat(buffer_status.status().error_message(), ", ",
                  "failed to resolve allocation for parameter ", i));
     }
-    auto replicated_buffers = buffer_status.value();
+    auto replicated_buffers = buffer_status.ValueOrDie();
     CHECK_EQ(options_.number_of_replicas(), replicated_buffers.size());
     for (int replica = 0; replica < options_.number_of_replicas(); ++replica) {
       const ShapedBuffer* shaped_buffer = replicated_buffers[replica];
@@ -354,14 +354,7 @@ Service::BuildAotResults(
     TF_ASSIGN_OR_RETURN(
         auto module, CreateModuleFromProto(*proto, config, run_backend_only));
     DumpHloModuleIfEnabled(*module, kBeforeOptimizationsDumpName);
-    if (run_backend_only) {
-      module_group->push_back(std::move(module));
-    } else {
-      TF_ASSIGN_OR_RETURN(auto module_after_opt,
-                          backend->compiler()->RunHloPasses(
-                              std::move(module), executors[0][0], options));
-      module_group->push_back(std::move(module_after_opt));
-    }
+    module_group->push_back(std::move(module));
   }
 
   AotCompilationOptions aot_options(backend->compiler()->PlatformId());
@@ -733,7 +726,7 @@ Status Service::ExecuteGraphParallel(const ExecuteGraphParallelRequest* arg,
         executable_ptrs[0], all_arguments[0], execute_backend_.get(),
         device_handles[0], computation_names[0], &profile);
     if (output_or_status.ok()) {
-      outputs.push_back(std::move(output_or_status).value());
+      outputs.push_back(std::move(output_or_status).ValueOrDie());
     } else {
       execution_status = output_or_status.status();
     }
@@ -743,7 +736,7 @@ Status Service::ExecuteGraphParallel(const ExecuteGraphParallelRequest* arg,
                                          execute_backend_.get(), device_handles,
                                          computation_names, &profile);
     if (outputs_or_status.ok()) {
-      outputs = std::move(outputs_or_status).value();
+      outputs = std::move(outputs_or_status).ValueOrDie();
     } else {
       execution_status = outputs_or_status.status();
     }

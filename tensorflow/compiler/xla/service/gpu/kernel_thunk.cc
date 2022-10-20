@@ -16,21 +16,19 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/gpu/kernel_thunk.h"
 
 #include <memory>
-#include <utility>
-#include <vector>
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_executable.h"
 #include "tensorflow/compiler/xla/service/gpu/stream_executor_util.h"
 #include "tensorflow/compiler/xla/status_macros.h"
-#include "tensorflow/compiler/xla/stream_executor/device_memory.h"
-#include "tensorflow/compiler/xla/stream_executor/kernel.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/stream_executor_no_cuda.h"
+#include "tensorflow/stream_executor/device_memory.h"
+#include "tensorflow/stream_executor/kernel.h"
 
 namespace xla {
 namespace gpu {
@@ -38,13 +36,11 @@ namespace gpu {
 KernelThunk::KernelThunk(ThunkInfo thunk_info,
                          absl::Span<const BufferAllocation* const> args,
                          const std::string& kernel_name,
-                         const LaunchDimensions& launch_dimensions,
-                         std::vector<mlir::Value> values)
+                         const LaunchDimensions& launch_dimensions)
     : Thunk(Kind::kKernel, thunk_info),
       args_(args.begin(), args.end()),
       kernel_name_(kernel_name),
-      launch_dimensions_(launch_dimensions),
-      values_(std::move(values)) {}
+      launch_dimensions_(launch_dimensions) {}
 
 std::string KernelThunk::ToStringExtra(int indent) const {
   return absl::StrFormat(", kernel = %s, launch dimensions = %s", kernel_name_,

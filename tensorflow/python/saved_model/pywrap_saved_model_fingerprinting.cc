@@ -33,16 +33,16 @@ void DefineFingerprintingModule(py::module main_module) {
 
   m.def(
       "CreateFingerprintDef",
-      [](std::string serialized_saved_model, std::string export_dir) {
+      [](std::string serialized_saved_model) {
         // Deserialize the SavedModel.
         SavedModel saved_model_pb;
         saved_model_pb.ParseFromString(serialized_saved_model);
 
-        return py::bytes(fingerprinting::CreateFingerprintDef(
-                             saved_model_pb.meta_graphs(0), export_dir)
-                             .SerializeAsString());
+        return py::bytes(
+            fingerprinting::CreateFingerprintDef(saved_model_pb.meta_graphs(0))
+                .SerializeAsString());
       },
-      py::arg("saved_model"), py::arg("export_dir"),
+      py::arg("graph_def"),
       py::doc(
           "Returns the serialized FingerprintDef of a serialized SavedModel."));
 }

@@ -37,14 +37,16 @@ namespace {
 class TupleSimplifierTest : public HloTestBase {
  protected:
   void Run(HloModule* module, bool change_expected) {
-    auto changed_status = RunHloPass(TupleSimplifier(), module);
+    TupleSimplifier simplifier;
+    auto changed_status = simplifier.Run(module);
     TF_ASSERT_OK(changed_status.status());
-    EXPECT_EQ(change_expected, changed_status.value());
+    EXPECT_EQ(change_expected, changed_status.ValueOrDie());
   }
   void Run(HloModule* module, bool change_expected, bool exclude_entry) {
-    auto changed_status = RunHloPass(TupleSimplifier(exclude_entry), module);
+    TupleSimplifier simplifier(exclude_entry);
+    auto changed_status = simplifier.Run(module);
     TF_ASSERT_OK(changed_status.status());
-    EXPECT_EQ(change_expected, changed_status.value());
+    EXPECT_EQ(change_expected, changed_status.ValueOrDie());
   }
 
   const Shape scalar_shape_ = ShapeUtil::MakeShape(F32, {});

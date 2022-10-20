@@ -248,11 +248,11 @@ struct PackJITCompileOpPattern
   bool cpu_codegen;
 };
 
-#define GEN_PASS_DEF_TFTOJITINVOCATIONPASS
+#define GEN_PASS_CLASSES
 #include "tensorflow/compiler/mlir/tools/kernel_gen/transforms/kernel_gen_passes.h.inc"
 
 struct TFToJITInvocationPass
-    : public impl::TFToJITInvocationPassBase<TFToJITInvocationPass> {
+    : public TFToJITInvocationPassBase<TFToJITInvocationPass> {
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<mlir::kernel_gen::tf_framework::TFFrameworkDialect,
                     scf::SCFDialect, shape::ShapeDialect>();

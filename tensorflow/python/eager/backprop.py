@@ -19,6 +19,9 @@
 
 import functools
 import operator
+import sys
+
+import six
 
 from tensorflow.python import pywrap_tfe
 from tensorflow.python.eager import backprop_util
@@ -333,7 +336,7 @@ def _get_arg_spec(f, params, param_args):
       return range(len(args) - 1)
     else:
       return range(len(args))
-  elif all(isinstance(x, str) for x in params):
+  elif all(isinstance(x, six.string_types) for x in params):
     return [args.index(n) for n in params]
   elif all(isinstance(x, int) for x in params):
     return params
@@ -749,7 +752,7 @@ def _extract_tensors_and_variables(tensor):
 
 
 @tf_export("GradientTape", "autodiff.GradientTape", v1=["GradientTape"])
-class GradientTape:
+class GradientTape(object):
   """Record operations for automatic differentiation.
 
   Operations are recorded if they are executed within this context manager and
@@ -1073,32 +1076,30 @@ class GradientTape:
 
     flat_targets = []
     for t in nest.flatten(target):
+      if not backprop_util.IsTrainable(t):
+        logging.vlog(
+            logging.WARN, "The dtype of the target tensor must be "
+            "floating (e.g. tf.float32) when calling GradientTape.gradient, "
+            "got %r", t.dtype)
       flat_targets.append(_handle_or_self(t))
     flat_targets = composite_tensor_gradient.get_flat_tensors_for_gradients(
         flat_targets)
-    for t in flat_targets:
-      if not backprop_util.IsTrainable(t):
-        logging.vlog(
-            1, "The dtype of the target tensor must be "
-            "floating (e.g. tf.float32) when calling GradientTape.gradient, "
-            "got %r", t.dtype)
 
     flat_sources_raw = nest.flatten(sources)
     flat_sources = []
     for t in flat_sources_raw:
-      flat_sources.append(_handle_or_self(t))
-    flat_sources = composite_tensor_gradient.get_flat_tensors_for_gradients(
-        flat_sources)
-    for t in flat_sources:
       if not backprop_util.IsTrainable(t):
         logging.vlog(
-            1, "The dtype of the source tensor must be "
+            logging.WARN, "The dtype of the source tensor must be "
             "floating (e.g. tf.float32) when calling GradientTape.gradient, "
             "got %r", t.dtype)
       if getattr(t, "is_packed", False):
         raise ValueError(
             "GradientTape.gradient is not supported on packed EagerTensors yet."
         )
+      flat_sources.append(_handle_or_self(t))
+    flat_sources = composite_tensor_gradient.get_flat_tensors_for_gradients(
+        flat_sources)
 
     if output_gradients is not None:
       output_gradients = nest.flatten(
@@ -1216,10 +1217,13 @@ class GradientTape:
         output = pfor_ops.pfor(loop_fn, target_size,
                                parallel_iterations=parallel_iterations)
       except ValueError as err:
-        raise ValueError(
-            "Encountered an exception while vectorizing the "
-            "jacobian computation. Vectorization can be disabled by setting"
-            " experimental_use_pfor to False.") from err
+        six.reraise(
+            ValueError,
+            ValueError(
+                str(err) + "\nEncountered an exception while vectorizing the "
+                "jacobian computation. Vectorization can be disabled by setting"
+                " experimental_use_pfor to False."),
+            sys.exc_info()[2])
     else:
       if context.executing_eagerly() and not self._persistent:
         raise RuntimeError(
@@ -1363,10 +1367,13 @@ class GradientTape:
         output = pfor_ops.pfor(loop_fn, target_row_size,
                                parallel_iterations=parallel_iterations)
       except ValueError as err:
-        raise ValueError(
-            "Encountered an exception while vectorizing the "
-            "batch_jacobian computation. Vectorization can be disabled by "
-            "setting experimental_use_pfor to False.") from err
+        six.reraise(
+            ValueError,
+            ValueError(
+                str(err) + "\nEncountered an exception while vectorizing the "
+                "batch_jacobian computation. Vectorization can be disabled by "
+                "setting experimental_use_pfor to False."),
+            sys.exc_info()[2])
     else:
       if context.executing_eagerly() and not self._persistent:
         raise RuntimeError(

@@ -60,9 +60,9 @@ ENTRY entry {
     true_computation=true_branch, false_computation=false_branch
 }
 )")
-                    .value();
+                    .ValueOrDie();
   ConditionalCanonicalizer pass;
-  EXPECT_TRUE(pass.Run(module.get()).value());
+  EXPECT_TRUE(pass.Run(module.get()).ValueOrDie());
   EXPECT_THAT(module->entry_computation()->root_instruction(),
               op::GetTupleElement(op::Conditional()));
 }

@@ -67,6 +67,7 @@ py_library(
         "//tensorflow/core:protos_all_py",
         "//tensorflow/python:framework",
         "//tensorflow/python:lib",
+        "@six_archive//:six",
     ],
 )
 
@@ -102,6 +103,7 @@ py_library(
         "//tensorflow/python:op_def_registry",
         "//tensorflow/python:platform",
         "//tensorflow/python:tensor_util",
+        "@six_archive//:six",
     ],
 )
 
@@ -121,6 +123,7 @@ py_library(
         "//tensorflow/python:platform",
         "//tensorflow/python:tensor_util",
         "//third_party/py/numpy",
+        "@six_archive//:six",
     ],
 )
 
@@ -134,6 +137,7 @@ py_library(
         "//tensorflow/python:array_ops",
         "//tensorflow/python:framework",
         "//tensorflow/python:platform",
+        "@six_archive//:six",
     ],
 )
 
@@ -481,6 +485,7 @@ py_library(
         "//tensorflow/python:training",
         "//tensorflow/python:variables",
         "//third_party/py/numpy",
+        "@six_archive//:six",
     ],
 )
 
@@ -502,6 +507,7 @@ py_library(
         ":debug_graphs",
         ":debug_service_pb2_grpc",
         "//tensorflow/core/debug:debug_service_proto_py",
+        "@six_archive//:six",
     ],
 )
 

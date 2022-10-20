@@ -597,11 +597,8 @@ Status IrEmitter::HandleSort(HloInstruction* hlo) {
   // Normalize the shape and the dimension to sort.
   Shape normalized_keys_shape =
       ShapeUtil::MakeShapeWithDescendingLayoutAndSamePhysicalLayout(keys_shape);
-  auto logical_to_physical =
-      LayoutUtil::MakeLogicalToPhysical(keys_shape.layout());
-  TF_RET_CHECK(sort->sort_dimension() < logical_to_physical.size());
-  int64_t physical_dimension_to_sort =
-      logical_to_physical[sort->sort_dimension()];
+  int64_t physical_dimension_to_sort = LayoutUtil::MakeLogicalToPhysical(
+      keys_shape.layout())[sort->sort_dimension()];
 
   int64_t sort_dimension_elements =
       normalized_keys_shape.dimensions(physical_dimension_to_sort);
@@ -3534,7 +3531,7 @@ llvm::Value* IrEmitter::GetBufferForGlobalCallReturnValue(
   }
 
   const BufferAllocation::Slice root_buffer =
-      assignment_.GetUniqueTopLevelSlice(root_inst).value();
+      assignment_.GetUniqueTopLevelSlice(root_inst).ValueOrDie();
   return EmitBufferPointer(root_buffer, root_inst->shape());
 }
 

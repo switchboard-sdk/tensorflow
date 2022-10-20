@@ -41,7 +41,6 @@ from tensorflow.python.ops import handle_data_util
 from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import variable_scope
-from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.saved_model import save_context
 from tensorflow.python.types import core
 from tensorflow.python.util import compat
@@ -52,7 +51,6 @@ from tensorflow.python.util import tf_contextlib
 from tensorflow.python.util import tf_decorator
 from tensorflow.python.util import tf_inspect
 from tensorflow.python.util.tf_export import tf_export
-
 
 ALLOWLIST_COLLECTIONS = [
     ops.GraphKeys.GLOBAL_VARIABLES,
@@ -837,18 +835,7 @@ class FuncGraph(ops.Graph):
         are replaced with placehoders, and non-tensors remain the same.
 
     """
-    # Support manual capture for inner nested tf.function is not possible at the
-    # moment. Inner here means any tf.function wrapped by another tf.function.
-    # Usage inside the outer most tf.function only is fine.
-    # The infeasibility is due to it's impossible to determine the
-    # definition scope of the captured side input. This info is needed when
-    # propagating inner tf.function captures to outer tf.function.
-    if isinstance(self.outer_graph, FuncGraph):
-      raise NotImplementedError(
-          ("Manual side input usage for inner nested tf.function is not "
-           f"supported. Got side input: {identifier}."))
-
-    # Prevent repeated captures
+    # prevent repeated captures
     if identifier in self._capture_placeholder_lib:
       return self._capture_placeholder_lib[identifier]
 
@@ -1171,6 +1158,7 @@ def func_graph_from_py_func(name,
     if signature is not None:
       args = signature
       kwargs = {}
+
     func_args = _get_defun_inputs_from_args(args, arg_names)
     func_kwargs = _get_defun_inputs_from_kwargs(kwargs)
 
@@ -1492,10 +1480,9 @@ def _get_defun_inputs(args, names, structured_args):
         try:
           placeholder = graph_placeholder(
               arg.dtype, arg.shape, name=requested_name)
-        except ValueError as e:
+        except ValueError:
           # Sometimes parameter names are not valid op names, so fall back to
           # unnamed placeholders.
-          logging.warning(e)
           placeholder = graph_placeholder(arg.dtype, arg.shape)
         if not arg_is_spec:
           handle_data_util.copy_handle_data(arg, placeholder)

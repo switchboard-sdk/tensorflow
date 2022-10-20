@@ -48,6 +48,7 @@ struct InterThreadConnectInfo {
 
 struct GroupMetadata {
   std::string name;
+  std::string model_id;  // inference only.
   absl::flat_hash_set<int64_t> parents;
   absl::flat_hash_set<int64_t> children;
 };
@@ -203,6 +204,9 @@ class EventForest {
   // Processes the worker thread by connecting a FunctionRun with the following
   // eager ops (e.g., for Keras callback).
   void ProcessWorker();
+
+  // Adds model ids to group_metadata_map for inference profiles.
+  void ProcessModelIds();
 
   EventNodeMap event_node_map_;
   std::vector<XPlaneVisitor> visitors_;

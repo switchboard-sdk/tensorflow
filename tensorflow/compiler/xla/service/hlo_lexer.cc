@@ -281,7 +281,7 @@ TokKind HloLexer::LexIdentifier() {
   // type is represented using nested parentheses without the string 'tuple'.
   if (primitive_util::IsPrimitiveTypeName(identifier)) {
     PrimitiveType primitive_type =
-        primitive_util::StringToPrimitiveType(identifier).value();
+        primitive_util::StringToPrimitiveType(identifier).ValueOrDie();
     if (primitive_type != TUPLE) {
       token_state_.primitive_type_val = primitive_type;
       return TokKind::kPrimitiveType;

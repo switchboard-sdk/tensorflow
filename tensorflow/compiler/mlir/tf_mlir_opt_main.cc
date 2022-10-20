@@ -18,6 +18,9 @@ limitations under the License.
 #include "mlir/InitAllPasses.h"  // from @llvm-project
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"  // from @llvm-project
 #include "tensorflow//compiler/mlir/tensorflow/transforms/tf_saved_model_passes.h"
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/lhlo/transforms/register_passes.h"
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/IR/register.h"
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/Dialect/mhlo/transforms/register_passes.h"
 #include "tensorflow/compiler/mlir/init_mlir.h"
 #include "tensorflow/compiler/mlir/lite/ir/tfl_ops.h"
 #include "tensorflow/compiler/mlir/lite/transforms/passes.h"
@@ -33,10 +36,6 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tosa/transforms/passes.h"
 #include "tensorflow/compiler/mlir/xla/transforms/passes.h"
 #include "tensorflow/compiler/mlir/xla/transforms/xla_passes.h"
-#include "tensorflow/compiler/xla/mlir_hlo/include/mlir-hlo/Dialect/lhlo/transforms/register_passes.h"
-#include "tensorflow/compiler/xla/mlir_hlo/include/mlir-hlo/Dialect/mhlo/IR/register.h"
-#include "tensorflow/compiler/xla/mlir_hlo/include/mlir-hlo/Dialect/mhlo/transforms/register_passes.h"
-#include "tensorflow/compiler/xla/mlir_hlo/stablehlo/stablehlo/dialect/Register.h"
 #include "tensorflow/core/platform/init_main.h"
 
 int main(int argc, char **argv) {
@@ -67,11 +66,8 @@ int main(int argc, char **argv) {
   mlir::registerAllDialects(registry);
   mlir::RegisterAllTensorFlowDialects(registry);
   mlir::mhlo::registerAllMhloDialects(registry);
-  mlir::stablehlo::registerAllDialects(registry);
   registry.insert<mlir::shape::ShapeDialect>();
   registry.insert<mlir::TFL::TensorFlowLiteDialect>();
-  registry.insert<mlir::quant::QuantizationDialect>();
-  registry.insert<mlir::quantfork::QuantizationForkDialect>();
   registry.insert<mlir::kernel_gen::tf_framework::TFFrameworkDialect>();
   return failed(
       mlir::MlirOptMain(argc, argv, "TensorFlow pass driver\n", registry));

@@ -84,9 +84,11 @@ StatusOr<mlir::Operation*> DynamicEnqueueSparseExpander::ExpandOp(
     TF_ASSIGN_OR_RETURN(
         mlir::Value expanded_indices,
         ExpandIndices(
-            builder, GetIndicesFromSparseTensor(sparse_feature_value).value()));
+            builder,
+            GetIndicesFromSparseTensor(sparse_feature_value).ValueOrDie()));
     indices.push_back(expanded_indices);
-    values.push_back(GetValuesFromSparseTensor(sparse_feature_value).value());
+    values.push_back(
+        GetValuesFromSparseTensor(sparse_feature_value).ValueOrDie());
   }
   // Insert a new op with new sparse operands, and delete the old one.
   // This op does not have a return value so we do not need to replace any

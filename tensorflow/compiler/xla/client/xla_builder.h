@@ -17,16 +17,11 @@ limitations under the License.
 #define TENSORFLOW_COMPILER_XLA_CLIENT_XLA_BUILDER_H_
 
 #include <cstdint>
-#include <deque>
 #include <functional>
 #include <map>
-#include <memory>
-#include <optional>
-#include <ostream>
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -59,33 +54,6 @@ namespace internal {
 struct XlaBuilderFriend {
   static XlaOp BuildAddDependency(XlaBuilder* builder, XlaOp operand,
                                   XlaOp token, const Shape& shape);
-
-  static XlaOp BuildAsyncStart(XlaBuilder* builder,
-                               absl::Span<const XlaOp> operands,
-                               std::string execution_thread, int64_t group_id,
-                               const XlaComputation& called_computation,
-                               const Shape& shape);
-  static XlaOp BuildAsyncStart(XlaBuilder* builder,
-                               absl::Span<const XlaOp> operands,
-                               std::string execution_thread,
-                               const XlaComputation& called_computation,
-                               const Shape& shape);
-  static XlaOp BuildAsyncUpdate(XlaBuilder* builder, const XlaOp operands,
-                                std::string execution_thread, int64_t group_id,
-                                const XlaComputation& called_computation,
-                                const Shape& shape);
-  static XlaOp BuildAsyncUpdate(XlaBuilder* builder, const XlaOp operands,
-                                std::string execution_thread,
-                                const XlaComputation& called_computation,
-                                const Shape& shape);
-  static XlaOp BuildAsyncDone(XlaBuilder* builder, const XlaOp operands,
-                              std::string execution_thread, int64_t group_id,
-                              const XlaComputation& called_computation,
-                              const Shape& shape);
-  static XlaOp BuildAsyncDone(XlaBuilder* builder, const XlaOp operands,
-                              std::string execution_thread,
-                              const XlaComputation& called_computation,
-                              const Shape& shape);
 
   static XlaOp BuildFusion(XlaBuilder* builder,
                            absl::Span<const XlaOp> operands,
@@ -778,12 +746,10 @@ class XlaBuilder {
       const std::optional<Layout>& layout = std::nullopt,
       const std::optional<bool> use_global_device_ids = std::nullopt);
 
-  XlaOp AllReduce(
-      XlaOp operand, const XlaComputation& computation,
-      absl::Span<const ReplicaGroup> replica_groups = {},
-      const std::optional<ChannelHandle>& channel_id = std::nullopt,
-      const std::optional<Shape>& shape_with_layout = std::nullopt,
-      const std::optional<bool> use_global_device_ids = std::nullopt);
+  XlaOp AllReduce(XlaOp operand, const XlaComputation& computation,
+                  absl::Span<const ReplicaGroup> replica_groups = {},
+                  const std::optional<ChannelHandle>& channel_id = std::nullopt,
+                  const std::optional<Shape>& shape_with_layout = std::nullopt);
 
   XlaOp ReduceScatter(
       XlaOp operand, const XlaComputation& computation,
@@ -1396,8 +1362,7 @@ class XlaBuilder {
   friend XlaOp AllReduce(XlaOp operand, const XlaComputation& computation,
                          absl::Span<const ReplicaGroup> replica_groups,
                          const std::optional<ChannelHandle>& channel_id,
-                         const std::optional<Shape>& shape_with_layout,
-                         const std::optional<bool> use_global_device_ids);
+                         const std::optional<Shape>& shape_with_layout);
   friend XlaOp ReduceScatter(XlaOp operand, const XlaComputation& computation,
                              int64_t scatter_dimension, int64_t shard_count,
                              absl::Span<const ReplicaGroup> replica_groups,
@@ -2378,8 +2343,7 @@ XlaOp AllGather(XlaOp operand, int64_t all_gather_dimension,
 XlaOp AllReduce(XlaOp operand, const XlaComputation& computation,
                 absl::Span<const ReplicaGroup> replica_groups = {},
                 const std::optional<ChannelHandle>& channel_id = std::nullopt,
-                const std::optional<Shape>& shape_with_layout = std::nullopt,
-                const std::optional<bool> use_global_device_ids = std::nullopt);
+                const std::optional<Shape>& shape_with_layout = std::nullopt);
 
 XlaOp ReduceScatter(
     XlaOp operand, const XlaComputation& computation, int64_t scatter_dimension,
@@ -2823,22 +2787,6 @@ XlaOp ConstantR4FromArray4D(XlaBuilder* builder,
                             const Array4D<NativeT>& values) {
   return ConstantFromArray(builder, values);
 }
-
-// Switches from automatic SPMD partitioning to manual partitioning. Converts a
-// full-shaped tensor (to be automatically partitioned by SPMD partitioner) to a
-// shard-shaped tensor to be consumed by manually partitioned ops.
-StatusOr<xla::XlaOp> ConvertSpmdFullToShardShape(
-    xla::XlaBuilder* builder, xla::XlaOp input, int single_dim,
-    const xla::OpSharding& manual_sharding,
-    absl::Span<const int64_t> unspecified_dims);
-
-// Switches from manual partitioning to automatic SPMD partitioning. Converts a
-// shard-shaped tensor (manually partitioned in SPMD-style) to a full-shaped
-// tensor to be partitioned automatically by the SPMD partitioner.
-StatusOr<xla::XlaOp> ConvertSpmdShardToFullShape(
-    xla::XlaBuilder* builder, xla::XlaOp input, const xla::Shape& output_shape,
-    int single_dim, const xla::OpSharding& manual_sharding,
-    absl::Span<const int64_t> unspecified_dims);
 
 }  // namespace xla
 

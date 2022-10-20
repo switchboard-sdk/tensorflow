@@ -1,6 +1,9 @@
-load("//tensorflow/tsl/platform/default:distribute.bzl", "distribute_py_test")
+load("//tensorflow/core/platform/default:distribute.bzl", "distribute_py_test")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//tensorflow:internal"],
+    licenses = ["notice"],
+)
 
 # Pybind rules must live in tensorflow/python due to header rule visibility.
 exports_files(

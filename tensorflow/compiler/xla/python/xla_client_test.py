@@ -14,7 +14,6 @@
 # ==============================================================================
 """Backend-dependent tests for the Python XLA client."""
 
-import collections
 import functools
 import itertools
 import re
@@ -713,29 +712,29 @@ def TestFactory(xla_backend,
       arg0_buffer = self.backend.buffer_from_pyval(arg0)
       arg1_buffer = self.backend.buffer_from_pyval(arg1)
       # Prefetch two buffers using copy_to_host_async, and then retrieve their
-      # values using np.asarray().
+      # values using to_py.
       arg0_buffer.copy_to_host_async()
       arg0_buffer.copy_to_host_async()  # Duplicate calls don't do anything.
       arg1_buffer.copy_to_host_async()
-      np.testing.assert_equal(arg0, np.asarray(arg0_buffer))
-      np.testing.assert_equal(arg1, np.asarray(arg1_buffer))
-      # copy_to_host_async does nothing after np.asarray() is called.
+      np.testing.assert_equal(arg0, arg0_buffer.to_py())
+      np.testing.assert_equal(arg1, arg1_buffer.to_py())
+      # copy_to_host_async does nothing after to_py is called.
       arg0_buffer.copy_to_host_async()
-      np.testing.assert_equal(arg0, np.asarray(arg0_buffer))
+      np.testing.assert_equal(arg0, arg0_buffer.to_py())
 
     def testDevice(self):
       x = np.arange(8, dtype=np.int32)
       for device in self.backend.local_devices():
         buf = self.backend.buffer_from_pyval(x, device=device)
         self.assertEqual(buf.device(), device)
-        np.testing.assert_equal(x, np.asarray(buf))
+        np.testing.assert_equal(x, buf.to_py())
 
     def testStandardTypes(self):
       for dtype in standard_dtypes:
         if dtype == bfloat16 or dtype == np.complex128:
           continue
         arr = self.backend.buffer_from_pyval(np.array([0, 1], dtype))
-        arr = np.asarray(arr)
+        arr = arr.to_py()
         self.assertEqual(dtype, type(arr[0]))
 
     def testUnsafeBufferPointer(self):
@@ -757,7 +756,7 @@ def TestFactory(xla_backend,
       y = self.backend.buffer_from_pyval(x)
       z = y.clone()
       self.assertNotEqual(id(x), id(y))
-      np.testing.assert_array_equal(np.asarray(y), np.asarray(z))
+      np.testing.assert_array_equal(y.to_py(), z.to_py())
       self.assertEqual(y.unsafe_buffer_pointer(), z.unsafe_buffer_pointer())
 
     @unittest.skipIf(cloud_tpu, "not implemented")
@@ -2328,7 +2327,7 @@ def TestFactory(xla_backend,
       y = xla_client._xla.dlpack_managed_tensor_to_buffer(
           dlt, self.cpu_backend, self.gpu_backend)
       np.testing.assert_array_equal(
-          x.astype(np.uint8) if dtype == np.bool_ else x, np.asarray(y))
+          x.astype(np.uint8) if dtype == np.bool_ else x, y.to_py())
 
     def testTensorsCanBeConsumedOnceOnly(self):
       x = np.array(np.random.rand(3, 4, 5, 6), dtype=np.float32)
@@ -2367,9 +2366,9 @@ def TestFactory(xla_backend,
       y = xla_client._xla.dlpack_managed_tensor_to_buffer(d1, self.backend)
       z = xla_client._xla.dlpack_managed_tensor_to_buffer(d2, self.backend)
       del d1, d2
-      np.testing.assert_array_equal(x, np.asarray(buffer))
-      np.testing.assert_array_equal(x, np.asarray(y))
-      np.testing.assert_array_equal(x, np.asarray(z))
+      np.testing.assert_array_equal(x, buffer.to_py())
+      np.testing.assert_array_equal(x, y.to_py())
+      np.testing.assert_array_equal(x, z.to_py())
 
   tests.append(DLPackTest)
 
@@ -2544,7 +2543,7 @@ def TestFactory(xla_backend,
       ])
       self.assertLen(output_buffers, len(expected_results))
       for buf, expected in zip(output_buffers, expected_results):
-        to_py_result = np.asarray(buf)
+        to_py_result = buf.to_py()
         self.assertEqual(expected.shape, to_py_result.shape)
         test_fn(expected, to_py_result)
         if self.backend.platform == "cpu" and buf.dtype != bfloat16:
@@ -2644,42 +2643,6 @@ def TestFactory(xla_backend,
 
   tests.append(DeviceAssignmentTest)
 
-  class TokenTest(ComputationTest):
-    """Tests related to PyToken."""
-
-    def testExecuteWithToken(self):
-      c = self._NewComputation()
-      ops.Mul(
-          ops.Constant(c, np.array([2.5, 3.3, -1.2, 0.7], np.float32)),
-          ops.Constant(c, np.array([-1.2, 2, -2, -3], np.float32)))
-      compiled_c = self.backend.compile(c.build())
-      results, token = compiled_c.execute_with_token([])
-      token.block_until_ready()
-      self.assertLen(results, 1)
-      np.testing.assert_allclose(
-          np.asarray(results[0]), np.float32([-3, 6.6, 2.4, -2.1]), rtol=3e-3)
-
-    def testExecuteShardedOnLocalDevicesWithTokens(self):
-      c = self._NewComputation()
-      ops.Mul(
-          ops.Constant(c, np.array([2.5, 3.3, -1.2, 0.7], np.float32)),
-          ops.Constant(c, np.array([-1.2, 2, -2, -3], np.float32)))
-      num_replicas = 1
-      options = xla_client.CompileOptions()
-      options.num_replicas = num_replicas
-      compiled_c = self.backend.compile(c.build(), compile_options=options)
-      results, sharded_token = compiled_c.execute_sharded_on_local_devices_with_tokens(
-          [])
-      sharded_token.block_until_ready()
-      self.assertLen(results, 1)
-      self.assertLen(results[0], 1)
-      np.testing.assert_allclose(
-          np.asarray(results[0][0]),
-          np.float32([-3, 6.6, 2.4, -2.1]),
-          rtol=3e-3)
-
-  tests.append(TokenTest)
-
   class HostCallbackTest(ComputationTest):
     """Tests related to HostCallback."""
 
@@ -2733,7 +2696,7 @@ def TestFactory(xla_backend,
       results = compiled_c.execute([])
       self.assertLen(results, 1)
 
-      np.testing.assert_equal(np.asarray(results[0]), np.float32(1.25))
+      np.testing.assert_equal(results[0].to_py(), np.float32(1.25))
 
   tests.append(HostCallbackTest)
 
@@ -2795,39 +2758,9 @@ def TestFactory(xla_backend,
       self.assertLen(results[0], num_replicas)
 
       for i in range(num_replicas):
-        np.testing.assert_equal(np.asarray(results[0][i]), np.uint32(i))
+        np.testing.assert_equal(results[0][i].to_py(), np.uint32(i))
 
   tests.append(HostCallbackMultiReplicaTest)
-
-  class ExecutePortableTest(ComputationTest):
-
-    def testExecutePortable(self):
-      devices_by_kind = collections.defaultdict(list)
-      for device in self.backend.devices():
-        devices_by_kind[device.device_kind].append(device)
-      multi_devices = [d for d in devices_by_kind.values() if len(d) > 1]
-      if not multi_devices:
-        raise unittest.SkipTest("Test needs multiple identical devices")
-      devices = multi_devices[0]
-
-      c = self._NewComputation()
-      args = [
-          np.array(3, dtype=np.int32),
-          np.array([10, 15, -2, 7], dtype=np.int32)
-      ]
-      p0 = ops.Parameter(c, 0, xla_client.shape_from_pyval(args[0]))
-      p1 = ops.Parameter(c, 1, xla_client.shape_from_pyval(args[1]))
-      ops.Mul(p0, p1)
-      options = xla_client.CompileOptions()
-      options.compile_portable_executable = True
-      compiled_c = self.backend.compile(c.build(), compile_options=options)
-      for device in devices:
-        out, = compiled_c.execute(
-            [self.backend.buffer_from_pyval(a, device=device) for a in args],
-            device=device)
-        np.testing.assert_array_equal(np.asarray(out), args[0] * args[1])
-
-  tests.append(ExecutePortableTest)
 
   return tests
 

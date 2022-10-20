@@ -38,9 +38,7 @@ using ::tensorflow::profiler::test::StartServer;
 using ::tensorflow::testing::TmpDir;
 using Response = tensorflow::profiler::RemoteProfilerSessionManager::Response;
 
-// Tests have intemittently failed with 2s grace period, so setting this to
-// a large enough value.
-constexpr double kGracePeriodSeconds = 10.0;
+constexpr double kGracePeriodSeconds = 2.0;
 
 // Copied from capture_profile to not introduce a dependency.
 ProfileRequest PopulateProfileRequest(

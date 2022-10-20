@@ -11,8 +11,8 @@ java_runtime(
 platform(
     name = "rbe_windows_ltsc2019",
     constraint_values = [
-        "@platforms//cpu:x86_64",
-        "@platforms//os:windows",
+        "@bazel_tools//platforms:x86_64",
+        "@bazel_tools//platforms:windows",
     ],
     remote_execution_properties = """
         properties:{

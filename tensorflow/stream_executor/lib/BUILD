@@ -1,3 +1,4 @@
+load("//tensorflow:tensorflow.bzl", "filegroup")
 load("//tensorflow/core/platform:rules_cc.bzl", "cc_library")
 load("//tensorflow:tensorflow.bzl", "if_windows")
 load("//tensorflow/stream_executor:build_defs.bzl", "stream_executor_friends")
@@ -13,8 +14,24 @@ package_group(
     packages = stream_executor_friends(),
 )
 
+filegroup(
+    name = "c_srcs",
+    data = glob([
+        "**/*.cc",
+        "**/*.h",
+    ]),
+)
+
 cc_library(
     name = "lib",
+    srcs = glob(
+        [
+            "**/*.cc",
+        ],
+        exclude = [
+            "**/*test*",
+        ],
+    ),
     hdrs = glob(["**/*.h"]),
     linkopts = if_windows(["-DEFAULTLIB:ws2_32.lib"]),
     deps = [
@@ -28,8 +45,6 @@ cc_library(
         "//tensorflow/core/platform:status",
         "//tensorflow/core/platform:statusor",
         "//tensorflow/stream_executor/platform",
-        "//tensorflow/compiler/xla/stream_executor/platform",
-        "//tensorflow/compiler/xla/stream_executor/lib",
     ] + if_static([
         "//tensorflow/core/platform:env_impl",
     ]),

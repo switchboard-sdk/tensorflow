@@ -107,12 +107,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/transfer_manager.h"
 #include "tensorflow/compiler/xla/shape.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/stream_executor/device_memory.h"
-#include "tensorflow/compiler/xla/stream_executor/device_memory_allocator.h"
-#include "tensorflow/compiler/xla/stream_executor/event.h"
-#include "tensorflow/compiler/xla/stream_executor/host/host_platform_id.h"
-#include "tensorflow/compiler/xla/stream_executor/lib/statusor.h"
-#include "tensorflow/compiler/xla/stream_executor/stream.h"
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/core/platform/cpu_info.h"
@@ -125,6 +119,12 @@ limitations under the License.
 #include "tensorflow/core/profiler/lib/connected_traceme.h"
 #include "tensorflow/core/profiler/lib/traceme.h"
 #include "tensorflow/core/profiler/lib/traceme_encode.h"
+#include "tensorflow/stream_executor/device_memory.h"
+#include "tensorflow/stream_executor/device_memory_allocator.h"
+#include "tensorflow/stream_executor/event.h"
+#include "tensorflow/stream_executor/host/host_platform_id.h"
+#include "tensorflow/stream_executor/lib/statusor.h"
+#include "tensorflow/stream_executor/stream.h"
 
 namespace xla {
 
@@ -147,8 +147,8 @@ absl::string_view PjRtStreamExecutorDevice::DebugString() const {
   return debug_string_;
 }
 
-absl::string_view PjRtStreamExecutorDevice::ToString() const {
-  return to_string_;
+std::string PjRtStreamExecutorDevice::ToString() const {
+  return absl::StrCat(platform_name(), "(id=", id(), ")");
 }
 
 StatusOr<DeviceAssignment> DevicesToDeviceAssignment(
@@ -533,7 +533,7 @@ void PjRtStreamExecutorBuffer::ScopedHold::Acquire(
     StatusOr<std::shared_ptr<TrackedDeviceBuffer>>&& buffer_or) {
   CHECK(!ok());
   if (buffer_or.ok()) {
-    buffer_ = buffer_or.value();
+    buffer_ = buffer_or.ValueOrDie();
     SetState(kValid);
   } else {
     status_ = buffer_or.status();
@@ -1343,7 +1343,7 @@ PjRtFuture<Status> PjRtStreamExecutorBuffer::ToLiteral(
       [promise](Status status) mutable { promise.Set(status); });
 
   auto usage_event = std::make_shared<BufferSequencingEvent>();
-  local_device->event_pool().ThenRecordEvent(stream, event_or.value());
+  local_device->event_pool().ThenRecordEvent(stream, event_or.ValueOrDie());
   usage_event->SetSequencingEvent(std::move(event_or).value(), stream);
   // When using the ComputeSynchronized allocation model, retain a reference to
   // the device_buffer until the copy completes, to ensure that the buffer isn't
@@ -1535,7 +1535,7 @@ StatusOr<std::unique_ptr<PjRtBuffer>> PjRtStreamExecutorBuffer::CopyToDevice(
     return buffer_and_event_or.status();
   }
 
-  auto& buffer_and_event = buffer_and_event_or.value();
+  auto& buffer_and_event = buffer_and_event_or.ValueOrDie();
   std::unique_ptr<PjRtBuffer>& buffer = buffer_and_event.first;
   std::shared_ptr<BufferSequencingEvent>& event = buffer_and_event.second;
 
@@ -2011,7 +2011,7 @@ StatusOr<ScopedShapedBuffer> PjRtStreamExecutorExecutable::EnqueueExecution(
   }
 
   if (device_state->allocation_model() == LocalDeviceState::kSynchronous) {
-    ExecutionOutput& execution_output = result_buffer_or_status.value();
+    ExecutionOutput& execution_output = result_buffer_or_status.ValueOrDie();
     // If we used a transient tuple for the arguments we donated its root table
     // buffer. In that case, and/or if we donated any input buffers that were
     // not aliased, the donated buffers are going to be passed back to us via

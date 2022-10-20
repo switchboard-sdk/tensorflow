@@ -352,7 +352,9 @@ tf_mkl_kernel_library(
 tf_mkl_kernel_library(
     name = "mkl_tmp_bf16_ops",
     prefix = "mkl_tmp_bf16_ops",
-    deps = MKL_DEPS,
+    deps = MKL_DEPS + [
+        "//tensorflow/core/kernels:no_op",
+    ],
 )
 
 tf_mkl_kernel_library(

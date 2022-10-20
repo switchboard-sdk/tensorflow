@@ -603,9 +603,11 @@ TfLiteStatus InterpreterBuilder::ParseTensors(
       }
       if (auto* buffer = (*buffers)[tensor->buffer()]) {
         if (auto* array = buffer->data()) {
-          *buffer_size = array->size();
-          *buffer_data = reinterpret_cast<const char*>(array->data());
-          return kTfLiteOk;
+          if (size_t size = array->size()) {
+            *buffer_size = size;
+            *buffer_data = reinterpret_cast<const char*>(array->data());
+            return kTfLiteOk;
+          }
         }
       }
       return kTfLiteOk;

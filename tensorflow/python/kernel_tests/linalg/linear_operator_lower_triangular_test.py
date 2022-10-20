@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from tensorflow.python.framework import config
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
@@ -126,6 +125,5 @@ class LinearOperatorLowerTriangularTest(
 
 
 if __name__ == "__main__":
-  config.enable_tensor_float_32_execution(False)
   linear_operator_test_util.add_tests(LinearOperatorLowerTriangularTest)
   test.main()

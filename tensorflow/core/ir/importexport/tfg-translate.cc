@@ -41,7 +41,7 @@ TranslateToMLIRRegistration graphdef_to_mlir(
         LOG(ERROR) << errorOrModule.status();
         return OwningOpRef<mlir::ModuleOp>{};
       }
-      return std::move(errorOrModule.value());
+      return std::move(errorOrModule.ValueOrDie());
     });
 
 TranslateFromMLIRRegistration mlir_to_graphdef(

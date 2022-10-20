@@ -99,12 +99,9 @@ class TRTEngineOpTestBase : public OpsTestBase {
       params.trt_logger_name = "DefaultLogger";
 
       TrtShapeOptimizationProfile profile;
-      // We set the input mask to true (no resource inputs)
-      std::vector<bool> input_mask = {true};
-      profile.SetInputMask(input_mask);
+      TensorShape my_shape;
       // We set profile 0 to be incompatible with the input used in the test.
       // This way we ensure that profile selection is tested.
-      TensorShape my_shape;
       TF_CHECK_OK(
           TensorShapeUtils::MakeShape(std::vector<int32>{4, 2}, &my_shape));
       profile.AddShape({my_shape, {}});

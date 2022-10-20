@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef TENSORFLOW_COMPILER_XLA_OVERFLOW_UTIL_H_
 #define TENSORFLOW_COMPILER_XLA_OVERFLOW_UTIL_H_
 
-#include <limits>
 #include <optional>
 #include <type_traits>
 

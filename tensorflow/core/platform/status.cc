@@ -23,7 +23,6 @@ limitations under the License.
 #include <string>
 
 #include "absl/base/call_once.h"
-#include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/types/optional.h"
@@ -112,21 +111,11 @@ std::vector<StackFrame> GetStackTrace(const ::tensorflow::Status& status) {
 
 }  // namespace errors
 
-Status::~Status() {}
-
 void Status::SetStackTrace(std::vector<StackFrame> stack_trace) {
-  if (state_ != nullptr) {
-    state_->stack_trace = stack_trace;
-  }
+  stack_trace_ = stack_trace;
 }
 
-std::vector<StackFrame> Status::GetStackTrace() const {
-  if (state_ != nullptr) {
-    return state_->stack_trace;
-  } else {
-    return std::vector<StackFrame>();
-  }
-}
+std::vector<StackFrame> Status::GetStackTrace() const { return stack_trace_; }
 
 absl::Span<const SourceLocation> Status::GetSourceLocations() const {
   return state_ != nullptr ? state_->source_locations
@@ -172,10 +161,6 @@ void Status::SlowCopyFrom(const State* src) {
   } else {
     state_ = std::make_unique<State>(*src);
   }
-}
-
-Status::State* Status::NewStateFromNonOKStatus(const Status& s) {
-  return new State(*s.state_);
 }
 
 const std::string& Status::empty_string() {
@@ -271,12 +256,12 @@ void Status::SetPayload(absl::string_view type_url, absl::string_view payload) {
   state_->payloads[std::string(type_url)] = std::string(payload);
 }
 
-absl::optional<absl::Cord> Status::GetPayload(
+absl::optional<absl::string_view> Status::GetPayload(
     absl::string_view type_url) const {
   if (ok()) return absl::nullopt;
   auto payload_iter = state_->payloads.find(std::string(type_url));
   if (payload_iter == state_->payloads.end()) return absl::nullopt;
-  return absl::Cord(payload_iter->second);
+  return absl::string_view(payload_iter->second);
 }
 
 bool Status::ErasePayload(absl::string_view type_url) {
@@ -302,34 +287,6 @@ std::ostream& operator<<(std::ostream& os, const Status& x) {
 }
 
 Status OkStatus() { return Status(); }
-
-Status FromAbslStatus(const absl::Status& s) {
-  if (s.ok()) {
-    return Status();
-  }
-  Status converted(static_cast<tensorflow::error::Code>(s.code()), s.message());
-  s.ForEachPayload(
-      [&converted](absl::string_view key, const absl::Cord& value) {
-        converted.SetPayload(key, std::string(value));
-      });
-
-  return converted;
-}
-
-absl::Status ToAbslStatus(const ::tensorflow::Status& s) {
-  if (s.ok()) {
-    return absl::OkStatus();
-  }
-
-  absl::Status converted(static_cast<absl::StatusCode>(s.code()),
-                         s.error_message());
-  s.ForEachPayload(
-      [&converted](tensorflow::StringPiece key, tensorflow::StringPiece value) {
-        converted.SetPayload(key, absl::Cord(value));
-      });
-
-  return converted;
-}
 
 std::string* TfCheckOpHelperOutOfLine(const ::tensorflow::Status& v,
                                       const char* msg) {

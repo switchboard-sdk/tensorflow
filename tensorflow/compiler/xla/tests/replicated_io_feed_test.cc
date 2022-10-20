@@ -54,10 +54,10 @@ XLA_TEST_F(ReplicatedIOFeedTest, InfeedAndOutfeed) {
   auto config = GetModuleConfigForTest();
   config.set_replica_count(kNumReplicas);
   std::unique_ptr<HloModule> module =
-      ParseAndReturnVerifiedModule(hlo_text, config).value();
+      ParseAndReturnVerifiedModule(hlo_text, config).ValueOrDie();
   auto executable =
       test_runner_.CreateExecutable(std::move(module), /*run_hlo_passes=*/true)
-          .value();
+          .ValueOrDie();
 
   auto device_assn = MakeDeviceAssn(kNumReplicas);
 

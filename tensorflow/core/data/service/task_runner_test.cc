@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <algorithm>
 #include <cstdint>
-#include <iterator>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -49,6 +48,7 @@ using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::Gt;
 using ::testing::HasSubstr;
+using ::testing::IsSubsetOf;
 using ::testing::SizeIs;
 using ::testing::UnorderedElementsAreArray;
 

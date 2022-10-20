@@ -476,10 +476,6 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
                            bool* end_of_sequence) override {
       VLOG(3) << "Calling GetNext in data service dataset's iterator.";
       mutex_lock l(mu_);
-      if (!ctx_.has_value()) {
-        // Save iterator context for use in async threads.
-        ctx_ = IteratorContext(ctx);
-      }
       EnsureThreadsStarted(ctx);
       std::shared_ptr<Result> result;
       do {
@@ -939,7 +935,6 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
           if (StrictRoundRobin()) {
             // Reserve a spot in the results_ queue.
             results_.push(std::make_shared<Result>());
-            RecordBufferEnqueue(&ctx_.value(), results_.back()->element);
             result = results_.back();
           } else {
             // The result will be added to results_ when it's ready.
@@ -1064,7 +1059,6 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
         finished_tasks_++;
       }
       if (enqueue_result && !result->end_of_sequence) {
-        RecordBufferEnqueue(&ctx_.value(), result->element);
         results_.push(std::move(result));
       }
       get_next_cv_.notify_all();
@@ -1136,14 +1130,6 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
         if (!IsPreemptedError(s)) {
           return s;
         }
-        if (!StrictRoundRobin()) {
-          mutex_lock l(mu_);
-          // Mark the result as skipped so that we try reading from a different
-          // task before returning to this one.
-          result->ready = true;
-          result->skip = true;
-          return Status::OK();
-        }
         {
           mutex_lock l(mu_);
           if (cancelled_) {
@@ -1182,7 +1168,6 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
     std::shared_ptr<Result> PopNextResult() TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
       std::shared_ptr<Result> result = results_.front();
       results_.pop();
-      RecordBufferDequeue(&ctx_.value(), result->element);
       return result;
     }
 
@@ -1250,9 +1235,6 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
     // to the queue after they are ready, to avoid head-of-line blocking.
     std::queue<std::shared_ptr<Result>> results_ TF_GUARDED_BY(mu_);
 
-    // Saved iterator context from the first call to GetNext, for use in async
-    // threads.
-    std::optional<IteratorContext> ctx_ = std::nullopt;
     bool initialized_ = false;
     // Set once in Initialize().
     int64_t job_id_;
@@ -1278,8 +1260,8 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
   const tstring data_transfer_protocol_;
   const tstring job_name_;
   const bool is_coordinated_read_;
-  const std::optional<int64_t> consumer_index_;
-  const std::optional<int64_t> num_consumers_;
+  const absl::optional<int64_t> consumer_index_;
+  const absl::optional<int64_t> num_consumers_;
   const int64_t max_outstanding_requests_;
   const int64_t task_refresh_interval_ms_;
   const TargetWorkers target_workers_;
@@ -1289,7 +1271,7 @@ class DataServiceDatasetOp::Dataset : public DatasetBase {
   const ResourceHandle iteration_counter_handle_;
   ResourceMgr* const resource_mgr_;  // Not owned
   const std::unique_ptr<CapturedFunction> captured_uncompress_func_;
-  const std::optional<CrossTrainerCacheOptions> cross_trainer_cache_options_;
+  const absl::optional<CrossTrainerCacheOptions> cross_trainer_cache_options_;
   const DataTypeVector output_types_;
   const std::vector<PartialTensorShape> output_shapes_;
 };

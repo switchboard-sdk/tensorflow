@@ -20,6 +20,7 @@ import sys
 import weakref
 
 from absl.testing import parameterized
+import six
 
 from tensorflow.python.checkpoint import checkpoint as trackable_utils
 from tensorflow.python.checkpoint import checkpoint_management
@@ -51,7 +52,7 @@ from tensorflow.python.training import saver as saver_lib
 class NonLayerTrackable(autotrackable.AutoTrackable):
 
   def __init__(self):
-    super().__init__()
+    super(NonLayerTrackable, self).__init__()
     self.a_variable = trackable_utils.add_variable(
         self, name="a_variable", shape=[])
 
@@ -115,8 +116,8 @@ class InterfaceTests(test.TestCase):
         "duplicate/.ATTRIBUTES/VARIABLE_VALUE",
         "ones_initializer/.ATTRIBUTES/VARIABLE_VALUE",
     )
-    self.assertCountEqual(expected_checkpoint_names,
-                          [v.name for v in named_variables])
+    six.assertCountEqual(
+        self, expected_checkpoint_names, [v.name for v in named_variables])
 
   def testInitNotCalled(self):
 
@@ -153,7 +154,8 @@ class _MirroringSaveable(saver_lib.BaseSaverBuilder.SaveableObject):
         tensor=tensor,
         slice_spec="",
         name=name)
-    super().__init__(tensor, [spec], name)
+    super(_MirroringSaveable, self).__init__(
+        tensor, [spec], name)
 
   def restore(self, restored_tensors, restored_shapes):
     """Restore the same value into both variables."""

@@ -31,6 +31,7 @@ e.g. --benchmarks=".*matmul*." will run all matmul related benchmarks.
 import time
 
 import numpy as np
+import six
 
 from tensorflow.python import pywrap_tfe
 from tensorflow.python.eager import backprop  # pylint: disable=unused-import
@@ -79,7 +80,7 @@ def c_tfe_py_fastpath_execute(a,
   except core._NotOkStatusException as e:
     if name is not None:
       e.message += " name: " + name
-    raise core._status_to_exception(e) from None
+    six.raise_from(core._status_to_exception(e), None)
 
 
 def run_benchmark(func, num_iters, execution_mode=None):

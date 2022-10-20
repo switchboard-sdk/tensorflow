@@ -189,7 +189,7 @@ void CoordinationServiceRpcHandler::GetKeyValueAsync(
       request->key(), [response, done = std::move(done)](
                           const StatusOr<std::string>& status_or_value) {
         if (status_or_value.ok()) {
-          response->mutable_kv()->set_value(status_or_value.value());
+          response->mutable_kv()->set_value(status_or_value.ValueOrDie());
         }
         done(status_or_value.status());
       });
@@ -211,7 +211,7 @@ void CoordinationServiceRpcHandler::TryGetKeyValueAsync(
     return;
   }
   response->mutable_kv()->set_key(request->key());
-  response->mutable_kv()->set_value(result.value());
+  response->mutable_kv()->set_value(result.ValueOrDie());
   done(Status::OK());
 }
 

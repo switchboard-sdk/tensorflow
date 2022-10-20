@@ -66,12 +66,13 @@ PyObject* SerializeGraphDefToPyBytes(const GraphDef& graph_def,
 
 }  // namespace
 
-PyObject* QuantizeQatModel(const absl::string_view saved_model_path,
+PyObject* QuantizeQATModel(const absl::string_view saved_model_path,
                            const absl::string_view exported_names_str,
                            const absl::string_view tags,
-                           const absl::string_view quant_opts_serialized) {
-  const absl::StatusOr<GraphDef> graph_def = internal::QuantizeQatModel(
-      saved_model_path, exported_names_str, tags, quant_opts_serialized);
+                           const std::string& quant_opts_serialized) {
+  const absl::StatusOr<tensorflow::GraphDef> graph_def =
+      internal::QuantizeQATModel(saved_model_path, exported_names_str, tags,
+                                 quant_opts_serialized);
   if (!graph_def.ok()) {
     PyErr_Format(PyExc_ValueError, "Failed to quantize QAT model: %s",
                  std::string(graph_def.status().message()).c_str());
@@ -81,12 +82,13 @@ PyObject* QuantizeQatModel(const absl::string_view saved_model_path,
   return SerializeGraphDefToPyBytes(*graph_def, __func__, __LINE__);
 }
 
-PyObject* QuantizePtqDynamicRange(
-    const absl::string_view saved_model_path,
-    const absl::string_view exported_names_str, const absl::string_view tags,
-    const absl::string_view quant_opts_serialized) {
-  const absl::StatusOr<GraphDef> graph_def = internal::QuantizePtqDynamicRange(
-      saved_model_path, exported_names_str, tags, quant_opts_serialized);
+PyObject* QuantizePTQDynamicRange(const absl::string_view saved_model_path,
+                                  const absl::string_view exported_names_str,
+                                  const absl::string_view tags,
+                                  const std::string& quant_opts_serialized) {
+  const absl::StatusOr<tensorflow::GraphDef> graph_def =
+      internal::QuantizePTQDynamicRange(saved_model_path, exported_names_str,
+                                        tags, quant_opts_serialized);
   if (!graph_def.ok()) {
     PyErr_Format(PyExc_ValueError,
                  "Failed to apply post-training dynamic range quantization to "
@@ -98,11 +100,11 @@ PyObject* QuantizePtqDynamicRange(
   return SerializeGraphDefToPyBytes(*graph_def, __func__, __LINE__);
 }
 
-PyObject* QuantizePtqModelPreCalibration(
+PyObject* QuantizePTQModelPreCalibration(
     const absl::string_view saved_model_path,
     const absl::string_view exported_names_str, const absl::string_view tags) {
-  const absl::StatusOr<GraphDef> graph_def =
-      internal::QuantizePtqModelPreCalibration(saved_model_path,
+  const absl::StatusOr<tensorflow::GraphDef> graph_def =
+      internal::QuantizePTQModelPreCalibration(saved_model_path,
                                                exported_names_str, tags);
   if (!graph_def.ok()) {
     PyErr_Format(PyExc_ValueError,
@@ -114,12 +116,12 @@ PyObject* QuantizePtqModelPreCalibration(
   return SerializeGraphDefToPyBytes(*graph_def, __func__, __LINE__);
 }
 
-PyObject* QuantizePtqModelPostCalibration(
+PyObject* QuantizePTQModelPostCalibration(
     const absl::string_view saved_model_path,
     const absl::string_view exported_names_str, const absl::string_view tags,
-    const absl::string_view quant_opts_serialized) {
-  const absl::StatusOr<GraphDef> graph_def =
-      internal::QuantizePtqModelPostCalibration(
+    const std::string& quant_opts_serialized) {
+  const absl::StatusOr<tensorflow::GraphDef> graph_def =
+      internal::QuantizePTQModelPostCalibration(
           saved_model_path, exported_names_str, tags, quant_opts_serialized);
   if (!graph_def.ok()) {
     PyErr_Format(

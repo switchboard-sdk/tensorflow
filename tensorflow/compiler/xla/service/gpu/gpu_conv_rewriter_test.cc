@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/service/gpu/gpu_conv_rewriter.h"
 
-#include "tensorflow/compiler/xla/protobuf_util.h"
 #include "tensorflow/compiler/xla/service/gpu/cublas_cudnn.h"
 #include "tensorflow/compiler/xla/service/hlo_computation.h"
 #include "tensorflow/compiler/xla/service/hlo_instruction.h"
@@ -86,7 +85,7 @@ class GpuConvRewriterTest : public HloTestBase {
 
  protected:
   bool RunPass(HloModule* module) {
-    return GpuConvRewriter().Run(module).value();
+    return GpuConvRewriter().Run(module).ValueOrDie();
   }
 
   // A convolution window with stride 1 and zero padding. The size fields are
@@ -300,7 +299,7 @@ TEST_F(GpuConvRewriterTest, BackwardInputConvolveEvenPadding) {
           output->shape(), reverse_kernel->shape(),
           /*feature_group_count=*/1, /*batch_group_count=*/1, conv_window,
           conv_dnums, /*preferred_element_type=*/std::nullopt)
-          .value()));
+          .ValueOrDie()));
 
   auto module = CreateNewVerifiedModule();
   HloComputation* entry_computation =
@@ -440,7 +439,7 @@ TEST_F(GpuConvRewriterTest, BackwardInputConvolveUnevenPaddingOnGradients) {
                          /*feature_group_count=*/1, /*batch_group_count=*/1,
                          conv_window, tf_default_dnums_for_backward_input_,
                          /*preferred_element_type=*/std::nullopt)
-                         .value()));
+                         .ValueOrDie()));
 
   auto module = CreateNewVerifiedModule();
   HloComputation* entry_computation =
@@ -491,7 +490,7 @@ TEST_F(GpuConvRewriterTest, BackwardInputConvolveLowPaddingTooLarge) {
                          /*feature_group_count=*/1, /*batch_group_count=*/1,
                          conv_window, tf_default_dnums_for_backward_input_,
                          /*preferred_element_type=*/std::nullopt)
-                         .value()));
+                         .ValueOrDie()));
 
   auto module = CreateNewVerifiedModule();
   HloComputation* entry_computation =
@@ -546,7 +545,7 @@ TEST_F(GpuConvRewriterTest, BackwardInputConvolveUnevenPaddingOnActivations) {
                          /*feature_group_count=*/1, /*batch_group_count=*/1,
                          conv_window, tf_default_dnums_for_backward_input_,
                          /*preferred_element_type=*/std::nullopt)
-                         .value()));
+                         .ValueOrDie()));
 
   auto module = CreateNewVerifiedModule();
   const HloComputation* entry_computation =
@@ -602,7 +601,7 @@ TEST_F(GpuConvRewriterTest,
                          /*feature_group_count=*/1, /*batch_group_count=*/1,
                          conv_window, tf_default_dnums_for_backward_input_,
                          /*preferred_element_type=*/std::nullopt)
-                         .value()));
+                         .ValueOrDie()));
 
   auto module = CreateNewVerifiedModule();
   HloComputation* entry_computation =

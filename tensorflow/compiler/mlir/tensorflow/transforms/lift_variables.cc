@@ -134,7 +134,7 @@ LogicalResult LiftVariablesFromSession(
       return module.emitOpError()
              << "failed to convert tensor (name: " << name.str() << ")";
     }
-    ElementsAttr tensor_attr = tensor_attr_or.value();
+    ElementsAttr tensor_attr = tensor_attr_or.ValueOrDie();
 
     builder.create<tf_saved_model::GlobalTensorOp>(
         NameLoc::get(builder.getStringAttr(name.str())),

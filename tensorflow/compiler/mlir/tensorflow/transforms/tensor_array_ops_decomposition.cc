@@ -217,7 +217,8 @@ LogicalResult HandleTensorArrayV3Op(
   tensorflow::Tensor scalar_tensor(tensorflow::DT_FLOAT, {});
   scalar_tensor.scalar<float>()() = 0.0f;
   auto flow = builder.create<TF::ConstOp>(
-      ta.getLoc(), tensorflow::ConvertTensor(scalar_tensor, &builder).value());
+      ta.getLoc(),
+      tensorflow::ConvertTensor(scalar_tensor, &builder).ValueOrDie());
   ta.flow().replaceAllUsesWith(flow);
   ta.erase();
   (*stats)[local_var].accumulate_on_write = false;
@@ -313,7 +314,7 @@ LogicalResult HandleTensorArrayConcatV3Op(
   }
   concat.lengths().replaceAllUsesWith(builder.create<TF::ConstOp>(
       concat.getLoc(),
-      tensorflow::ConvertTensor(lengths_tensor, &builder).value()));
+      tensorflow::ConvertTensor(lengths_tensor, &builder).ValueOrDie()));
   concat.erase();
   return success();
 }

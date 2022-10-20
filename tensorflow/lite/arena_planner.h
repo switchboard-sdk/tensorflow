@@ -50,8 +50,7 @@ class ArenaPlanner : public MemoryPlanner {
   // memory with any other tensor, effectively preserving them until the end
   // of inference.
   ArenaPlanner(TfLiteContext* context, std::unique_ptr<GraphInfo> graph_info,
-               bool preserve_all_tensors, int tensor_alignment,
-               int subgraph_index = 0);
+               bool preserve_all_tensors, int tensor_alignment);
   ~ArenaPlanner() override;
   ArenaPlanner(const ArenaPlanner&) = delete;
   ArenaPlanner& operator=(const ArenaPlanner&) = delete;

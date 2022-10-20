@@ -1,6 +1,11 @@
 load("//tensorflow:tensorflow.bzl", "cuda_py_test")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = [
+        "//tensorflow:internal",
+    ],
+    licenses = ["notice"],
+)
 
 py_library(
     name = "numpy",

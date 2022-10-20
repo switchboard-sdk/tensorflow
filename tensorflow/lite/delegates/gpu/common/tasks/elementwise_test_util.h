@@ -62,10 +62,6 @@ absl::Status GreaterTest(TestExecutionEnvironment* env);
 absl::Status GreaterEqualTest(TestExecutionEnvironment* env);
 absl::Status EqualTest(TestExecutionEnvironment* env);
 absl::Status NotEqualTest(TestExecutionEnvironment* env);
-absl::Status CosBroadcastTest(TestExecutionEnvironment* env);
-absl::Status MaximumScalarBroadcastInputTest(TestExecutionEnvironment* env);
-absl::Status MulLinearBroadcastInputTest(TestExecutionEnvironment* env);
-absl::Status MulBroadcastBothInputsTest(TestExecutionEnvironment* env);
 
 }  // namespace gpu
 }  // namespace tflite

@@ -339,8 +339,6 @@ class PyFuncOp : public OpKernel {
       call.eager_async = eager_async_;
     }
 
-    VLOG(1) << "PyFuncOp of token " << call.token << "is called.";
-
     for (int i = 0; i < ctx->num_inputs(); ++i) {
       call.ins.push_back(ctx->input(i));
     }

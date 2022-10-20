@@ -103,6 +103,7 @@ tf_py_test(
         "//tensorflow/python:lib",
         "//tensorflow/python:util",
         "//tensorflow/python:variables",
+        "@six_archive//:six",
     ],
 )
 

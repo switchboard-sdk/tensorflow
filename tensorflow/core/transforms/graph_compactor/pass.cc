@@ -35,14 +35,10 @@ limitations under the License.
 #include "tensorflow/core/ir/ops.h"
 #include "tensorflow/core/ir/tf_op_registry.h"
 #include "tensorflow/core/platform/statusor.h"
+#include "tensorflow/core/transforms/pass_detail.h"
 
 namespace mlir {
 namespace tfg {
-
-#define GEN_PASS_DEF_ADDDEFAULTATTRS
-#define GEN_PASS_DEF_NAMECOMPRESS
-#define GEN_PASS_DEF_STRIPDEFAULTATTRS
-#include "tensorflow/core/transforms/passes.h.inc"
 
 // Encode an unsigned integer in as few characters as possible to a string that
 // is still a valid TensorFlow node name. The regex for valid names, according
@@ -83,7 +79,7 @@ static void EncodeName(unsigned counter, std::string &output) {
 }
 
 namespace {
-class NameCompressPass : public impl::NameCompressBase<NameCompressPass> {
+class NameCompressPass : public NameCompressBase<NameCompressPass> {
  public:
   LogicalResult initialize(MLIRContext *context) override {
     dialect_ = context->getOrLoadDialect<TFGraphDialect>();
@@ -166,7 +162,7 @@ std::unique_ptr<Pass> CreateNameCompressPass() {
 
 namespace {
 class StripDefaultAttrsPass
-    : public impl::StripDefaultAttrsBase<StripDefaultAttrsPass> {
+    : public StripDefaultAttrsBase<StripDefaultAttrsPass> {
  public:
   LogicalResult initialize(MLIRContext *context) override {
     // Initialize the pass by getting a registered instance of the TensorFlow
@@ -222,17 +218,16 @@ LogicalResult StripDefaultAttrsPass::removeDefaultValuedAttrs(Operation *op) {
   for (const tensorflow::OpDef::AttrDef &attr : op_reg_data->op_def.attr()) {
     // Ignore attributes without default values.
     if (!attr.has_default_value()) continue;
-    auto it =
-        ::mlir::impl::findAttrSorted(attrs.begin(), attrs.end(), attr.name());
+    auto it = impl::findAttrSorted(attrs.begin(), attrs.end(), attr.name());
     // Ignore default-valued attributes that are already missing.
     if (!it.second) continue;
     // Convert the TensorFlow attribute value and compare it to the MLIR
     // attribute.
     tensorflow::StatusOr<Attribute> maybe_attr =
-        ConvertAttributeValue(attr.default_value(), b);
+        ConvertAttributeValue(attr.default_value(), b, dialect_);
     if (!maybe_attr.ok())
       return op->emitError(maybe_attr.status().error_message());
-    if (maybe_attr.value() == it.first->getValue())
+    if (maybe_attr.ValueOrDie() == it.first->getValue())
       indices_to_remove.set(std::distance(attrs.begin(), it.first));
   }
   if (indices_to_remove.none()) return success();
@@ -254,8 +249,7 @@ std::unique_ptr<Pass> CreateStripDefaultAttrsPass() {
 }
 
 namespace {
-class AddDefaultAttrsPass
-    : public impl::AddDefaultAttrsBase<AddDefaultAttrsPass> {
+class AddDefaultAttrsPass : public AddDefaultAttrsBase<AddDefaultAttrsPass> {
  public:
   LogicalResult initialize(MLIRContext *context) override {
     // Initialize the pass by getting a registered instance of the TensorFlow
@@ -319,10 +313,10 @@ LogicalResult AddDefaultAttrsPass::addDefaultValuedAttrs(Operation *op) {
     if (attrs.get(attr.name())) continue;
     // Convert the TensorFlow attribute value and set it.
     tensorflow::StatusOr<Attribute> maybe_attr =
-        ConvertAttributeValue(attr.default_value(), b);
+        ConvertAttributeValue(attr.default_value(), b, dialect_);
     if (!maybe_attr.ok())
       return op->emitError(maybe_attr.status().error_message());
-    attrs.set(attr.name(), maybe_attr.value());
+    attrs.set(attr.name(), maybe_attr.ValueOrDie());
   }
   op->setAttrs(attrs.getDictionary(&getContext()));
 

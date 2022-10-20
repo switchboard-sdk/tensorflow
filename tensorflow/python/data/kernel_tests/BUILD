@@ -166,17 +166,6 @@ tf_py_test(
 )
 
 tf_py_test(
-    name = "counter_test",
-    size = "small",
-    srcs = ["counter_test.py"],
-    deps = [
-        "//tensorflow/python:client_testlib",
-        "//tensorflow/python:dtypes",
-        "//tensorflow/python/data/kernel_tests:test_base",
-    ],
-)
-
-tf_py_test(
     name = "dataset_spec_test",
     size = "small",
     srcs = ["dataset_spec_test.py"],
@@ -804,6 +793,7 @@ tf_py_test(
         "//tensorflow/python/data/ops:dataset_ops",
         "//third_party/py/numpy",
         "@absl_py//absl/testing:parameterized",
+        "@six_archive//:six",
     ],
 )
 

@@ -503,14 +503,12 @@ tf_cc_test(
     deps = [
         "//tensorflow/core:test_main",
     ] + if_xla_available([
-        # LINT.IfChange
         ":aot_compiled_vars_and_arithmetic",
         ":aot_compiled_vars_and_arithmetic_frozen",
         ":aot_compiled_x_matmul_y_large",
         ":aot_compiled_x_matmul_y_large_multithreaded",
         ":aot_compiled_x_matmul_y_small",
         ":aot_compiled_x_plus_y",
-        # LINT.ThenChange(//tensorflow/tools/pip_package/xla_build/pip_test/run_xla_aot_test.sh)
         "//tensorflow/compiler/xla/service/cpu:runtime_matmul_acl",
         "//tensorflow/core:test",
         "//tensorflow/core/platform:logging",

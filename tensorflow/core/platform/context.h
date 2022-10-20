@@ -39,9 +39,9 @@ class WithContext;
 }  // namespace tensorflow
 
 #if defined(PLATFORM_GOOGLE)
-#include "tensorflow/tsl/platform/google/context.h"  // IWYU pragma: export
+#include "tensorflow/core/platform/google/context.h"
 #else
-#include "tensorflow/tsl/platform/default/context.h"  // IWYU pragma: export
+#include "tensorflow/core/platform/default/context.h"
 #endif
 
 #endif  // TENSORFLOW_CORE_PLATFORM_CONTEXT_H_

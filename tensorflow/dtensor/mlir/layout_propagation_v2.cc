@@ -448,9 +448,9 @@ mlir::LogicalResult MergeAndGetUpdatedLayouts(
 
     auto current_layout = merged_layouts.find(value);
     if (current_layout == merged_layouts.end() ||
-        current_layout->second != merged.value()) {
+        current_layout->second != merged.ValueOrDie()) {
       updated_merge.insert(value);
-      merged_layouts[value] = merged.value();
+      merged_layouts[value] = merged.ValueOrDie();
     }
   }
 

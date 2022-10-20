@@ -359,14 +359,8 @@ Status AddCopiesForInPlaceOperation(const HloAliasAnalysis& alias_analysis,
 // each aliased parameter to resolve interference of aliased input and output
 // buffer. We later rely on RemoveUnnecessaryCopies to drop the unnecessary
 // ones.
-Status AddCopiesForAliasedInputOutputs(
-    HloModule* module,
-    const absl::flat_hash_set<absl::string_view>& execution_threads) {
+Status AddCopiesForAliasedInputOutputs(HloModule* module) {
   HloComputation* entry = module->entry_computation();
-  if (!HloInstruction::IsThreadIncluded(entry->execution_thread(),
-                                        execution_threads)) {
-    return Status::OK();
-  }
   HloInstruction* root = entry->root_instruction();
 
   ShapeTree<bool> output_indices_to_copy(root->shape());
@@ -1697,14 +1691,13 @@ class CopyRemover {
     }
   }
 
-  // Calls `visitor` on each item in the sequence of HloValues starting from
-  // `element`.
-  //
-  // If element is not head, traverse from element to tail, then wrap
-  // around. The ordering is important for live range region analysis.
+  // return the sequence of HloValues starting from element.
+  // If element is not head, traverse from element to tail, then wrap around.
+  // The ordering is important for live range region analysis.
   void ForEachValueInRange(const ValueNode* element,
                            std::function<void(const ValueNode*)> visitor) {
     const ValueNode* head = element;
+    std::vector<const ValueNode*> values;
     for (const ValueNode* p = head; p != nullptr; p = Next(*p)) {
       visitor(p);
     }
@@ -1850,8 +1843,7 @@ Status CopyInsertion::AddCopiesToResolveInterference(
     }
   }
 
-  TF_RETURN_IF_ERROR(
-      AddCopiesForAliasedInputOutputs(module, execution_threads));
+  TF_RETURN_IF_ERROR(AddCopiesForAliasedInputOutputs(module));
   return OkStatus();
 }
 

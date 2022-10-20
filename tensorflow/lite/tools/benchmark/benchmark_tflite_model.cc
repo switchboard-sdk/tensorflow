@@ -122,33 +122,6 @@ class InterpreterStatePrinter : public BenchmarkListener {
   const BenchmarkParams* params_ = nullptr;   // not own the memory.
 };
 
-class OutputSaver : public BenchmarkListener {
- public:
-  explicit OutputSaver(Interpreter* interpreter) : interpreter_(interpreter) {}
-
-  void OnBenchmarkStart(const BenchmarkParams& params) override {
-    params_ = &params;
-  }
-
-  void OnBenchmarkEnd(const BenchmarkResults& results) override {
-    std::string path = params_->Get<std::string>("output_filepath");
-    if (path.empty()) return;
-
-    std::ofstream ofs(path, std::ofstream::out);
-    if (ofs.good()) {
-      for (int i = 0; i < interpreter_->outputs().size(); i++) {
-        ofs.write(interpreter_->output_tensor(i)->data.raw,
-                  interpreter_->output_tensor(i)->bytes);
-      }
-      ofs.close();
-    }
-  }
-
- private:
-  Interpreter* const interpreter_ = nullptr;
-  const BenchmarkParams* params_ = nullptr;
-};
-
 std::vector<std::string> Split(const std::string& str, const char delim) {
   if (str.empty()) {
     return {};
@@ -224,11 +197,9 @@ TfLiteStatus PopulateInputValueFiles(
   std::vector<std::string> value_files = Split(value_files_string, ',');
   for (const auto& val : value_files) {
     std::pair<std::string, std::string> name_file_pair;
-    TfLiteStatus status = SplitInputLayerNameAndValueFile(val, name_file_pair);
-    if (status != kTfLiteOk) {
+    if (SplitInputLayerNameAndValueFile(val, name_file_pair) == kTfLiteError) {
       TFLITE_LOG(ERROR) << "Wrong input value file item specified: " << val;
-      TFLITE_LOG(ERROR) << status;
-      return status;
+      return kTfLiteError;
     }
 
     // Ensure the specific input layer name exists.
@@ -310,18 +281,14 @@ TfLiteStatus SplitInputLayerNameAndValueFile(
     std::pair<std::string, std::string>& name_file_pair) {
   // 1. split the string by ':' and ignore escaped characters
   int delim_index = -1;
-  for (int i = 0; i < name_and_value_file.length() - 1; ++i) {
-    if (name_and_value_file[i] == ':') {
-      if (name_and_value_file[i + 1] == ':') {
-        ++i;
+  for (int i = 1; i < name_and_value_file.length(); ++i) {
+    if (name_and_value_file[i] == ':' && name_and_value_file[i - 1] != '\\') {
+      if (delim_index == -1) {
+        delim_index = i;
       } else {
-        if (delim_index == -1) {
-          delim_index = i;
-        } else {
-          TFLITE_LOG(ERROR)
-              << name_and_value_file << " contains more than one delimiter.";
-          return kTfLiteError;
-        }
+        TFLITE_LOG(ERROR) << name_and_value_file
+                          << " contains more than one delimiter.";
+        return kTfLiteError;
       }
     }
   }
@@ -330,11 +297,11 @@ TfLiteStatus SplitInputLayerNameAndValueFile(
                       << " doesn't contain any delimiter.";
     return kTfLiteError;
   }
-  // 2. replace escaped "::" string to ":"
+  // 2. replace escaped "\:" string to ":"
   name_file_pair.first = absl::StrReplaceAll(
-      name_and_value_file.substr(0, delim_index), {{"::", ":"}});
+      name_and_value_file.substr(0, delim_index), {{"\\:", ":"}});
   name_file_pair.second = absl::StrReplaceAll(
-      name_and_value_file.substr(delim_index + 1), {{"::", ":"}});
+      name_and_value_file.substr(delim_index + 1), {{"\\:", ":"}});
   return kTfLiteOk;
 }
 
@@ -370,8 +337,6 @@ BenchmarkParams BenchmarkTfLiteModel::DefaultParams() {
                           BenchmarkParam::Create<bool>(false));
   default_params.AddParam("optimize_memory_for_large_tensors",
                           BenchmarkParam::Create<int32_t>(0));
-  default_params.AddParam("output_filepath",
-                          BenchmarkParam::Create<std::string>(""));
 
   tools::ProvidedDelegateList delegate_providers(&default_params);
   delegate_providers.AddAllDelegateParams();
@@ -448,10 +413,7 @@ std::vector<Flag> BenchmarkTfLiteModel::GetFlags() {
                        "are not used."),
       CreateFlag<int32_t>(
           "optimize_memory_for_large_tensors", &params_,
-          "Optimize memory usage for large tensors with sacrificing latency."),
-      CreateFlag<std::string>(
-          "output_filepath", &params_,
-          "File path to export outputs layer as binary data.")};
+          "Optimize memory usage for large tensors with sacrificing latency.")};
 
   flags.insert(flags.end(), specific_flags.begin(), specific_flags.end());
 
@@ -494,8 +456,6 @@ void BenchmarkTfLiteModel::LogParams() {
                       "Release dynamic tensor memory", verbose);
   LOG_BENCHMARK_PARAM(int32_t, "optimize_memory_for_large_tensors",
                       "Optimize memory usage for large tensors", verbose);
-  LOG_BENCHMARK_PARAM(std::string, "output_filepath",
-                      "File path to export outputs layer to", verbose);
 
   for (const auto& delegate_provider :
        tools::GetRegisteredDelegateProviders()) {
@@ -840,8 +800,6 @@ TfLiteStatus BenchmarkTfLiteModel::Init() {
 
   AddOwnedListener(
       std::unique_ptr<BenchmarkListener>(new RuyProfileListener()));
-  AddOwnedListener(
-      std::unique_ptr<BenchmarkListener>(new OutputSaver(interpreter_.get())));
 
   return kTfLiteOk;
 }

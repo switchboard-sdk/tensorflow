@@ -565,7 +565,7 @@ StatusOr<HloInstruction*> TriangularSolveExpander::ExpandInstruction(
       TriangularSolveOptions_Transpose_Name(options.transpose_a()),
       options.unit_diagonal() ? "unit" : "nonunit");
 
-  HloModule* module = instruction->GetModule();
+  HloModule* module = instruction->parent()->parent();
 
   HloComputation*& computation =
       computation_cache_.emplace(name, nullptr).first->second;
