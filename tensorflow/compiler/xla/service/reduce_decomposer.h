@@ -40,7 +40,8 @@ namespace xla {
 //    -> reduce -> copy ->
 //
 // For a variadic recuction, the layout assignment guarantees that the layout
-// is the same for all operands and all outputs.
+// is the same for all outputs. This pass will transpose the variadic reduction
+// inputs which have different physical layout to the first operand.
 //
 //   A{L} \
 //   B{L} -> reduce{L'} ->
@@ -56,7 +57,7 @@ namespace xla {
 //   dimensions dropped).
 //
 // PRECONDITION:
-//  In variadic reduction, all inputs and all outputs have the same layout
+//  In variadic reduction, all outputs have the same layout
 //  (enforced by layout assignment).
 class ReduceDecomposer : public HloModulePass {
  public:
@@ -65,7 +66,10 @@ class ReduceDecomposer : public HloModulePass {
 
   absl::string_view name() const override { return "reduce-decomposer"; }
 
-  StatusOr<bool> Run(HloModule* module) override;
+  using HloPassInterface::Run;
+  StatusOr<bool> Run(
+      HloModule* module,
+      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
  private:
   HloPredicate custom_layout_allowed_;

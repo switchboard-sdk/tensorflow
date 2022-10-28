@@ -30,9 +30,7 @@ namespace gpu {
 GPUOperation CreatePReLU(const GpuInfo& gpu_info,
                          const OperationDef& definition,
                          const PReLUAttributes& attr) {
-  GPUOperation result(definition);
-  result.elementwise_ = true;
-
+  ElementwiseDescriptor op_desc;
   std::string alpha_read;
   auto alpha_linear =
       absl::get_if<tflite::gpu::Tensor<Linear, DataType::FLOAT32>>(&attr.alpha);
@@ -42,7 +40,7 @@ GPUOperation CreatePReLU(const GpuInfo& gpu_info,
         DeduceLinearStorageType(definition.GetPrimaryStorageType());
     desc.element_type = definition.GetPrimaryDataType();
     desc.UploadLinearData(*alpha_linear);
-    result.args_.AddObject(
+    op_desc.args.AddObject(
         "alpha", std::make_unique<TensorLinearDescriptor>(std::move(desc)));
     alpha_read = "FLT4 alpha_val = args.alpha.Read(S_COORD);\n";
   }
@@ -55,11 +53,8 @@ GPUOperation CreatePReLU(const GpuInfo& gpu_info,
     TensorDescriptor const_tensor_desc = definition.src_tensors[0];
     auto status =
         const_tensor_desc.UpdateToSupportedStorageType(gpu_info, shape);
-    if (!status.ok()) {
-      const_tensor_desc.storage_type = TensorStorageType::BUFFER;
-    }
     const_tensor_desc.UploadData(*alpha_hwc);
-    result.args_.AddObject("alpha", std::make_unique<TensorDescriptor>(
+    op_desc.args.AddObject("alpha", std::make_unique<TensorDescriptor>(
                                         std::move(const_tensor_desc)));
     const std::string x_coord = shape.w == 1 ? "0" : "X_COORD";
     const std::string y_coord = shape.h == 1 ? "0" : "Y_COORD";
@@ -73,24 +68,12 @@ GPUOperation CreatePReLU(const GpuInfo& gpu_info,
     }
   }
 
-  if (attr.clip != 0) {
-    if (definition.precision == CalculationsPrecision::F32) {
-      result.args_.AddFloat("clip", attr.clip);
-    } else {
-      result.args_.AddHalf("clip", half(attr.clip));
-    }
-    result.code_ = alpha_read +
-                   "in_out_value = clamp(in_out_value, INIT_FLT4(0.0f), "
-                   "INIT_FLT4(args.clip)) + "
-                   "min(INIT_FLT4(0.0f), in_out_value) * alpha_val;";
-  } else {
-    result.code_ = alpha_read +
-                   "in_out_value = max(INIT_FLT4(0.0f), in_out_value) + "
-                   "min(INIT_FLT4(0.0f), "
-                   "in_out_value) * alpha_val;";
-  }
+  op_desc.code = alpha_read +
+                 "out_value = max(INIT_FLT4(0.0f), in_value) + "
+                 "min(INIT_FLT4(0.0f), "
+                 "in_value) * alpha_val;";
 
-  return result;
+  return CreateGpuOperation(definition, std::move(op_desc));
 }
 
 }  // namespace gpu

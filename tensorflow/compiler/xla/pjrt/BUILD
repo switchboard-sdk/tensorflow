@@ -175,6 +175,42 @@ cc_library(
     ],
 )
 
+tf_cc_test(
+    name = "pjrt_client_test_cpu",
+    srcs = ["pjrt_client_test.cc"],
+    defines = ["PJRT_CLIENT_TEST_CPU"],
+    deps = [
+        ":pjrt_client",
+        ":tfrt_cpu_pjrt_client",
+        "//tensorflow/compiler/xla:test",
+        "//tensorflow/compiler/xla/client:xla_builder",
+        "//tensorflow/compiler/xla/tests:literal_test_util",
+        "//tensorflow/core:test_main",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+tf_cc_test(
+    name = "pjrt_client_test_gpu",
+    srcs = ["pjrt_client_test.cc"],
+    defines = ["PJRT_CLIENT_TEST_GPU"],
+    tags = [
+        "no_oss",
+        "notap",
+        "requires-gpu-nvidia:2",
+    ],
+    deps = [
+        ":gpu_device",
+        ":pjrt_client",
+        "//tensorflow/compiler/xla:test",
+        "//tensorflow/compiler/xla/client:xla_builder",
+        "//tensorflow/compiler/xla/service:gpu_plugin",
+        "//tensorflow/compiler/xla/tests:literal_test_util",
+        "//tensorflow/core:test_main",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
 cc_library(
     name = "utils",
     srcs = ["utils.cc"],
@@ -249,6 +285,7 @@ cc_library(
         "//tensorflow/stream_executor:stream",
         "//tensorflow/stream_executor/host:host_platform_id",
         "//tensorflow/stream_executor/lib",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -354,6 +391,7 @@ cc_library(
     ] + if_cuda([
         ":nccl_id_store",
         "@local_config_cuda//cuda:cuda_headers",
+        "//tensorflow/core/common_runtime/gpu:gpu_cudamallocasync_allocator",
         "//tensorflow/stream_executor/cuda:cuda_activation_header",
     ]) + if_rocm([
         "@local_config_rocm//rocm:rocm_headers",
@@ -433,10 +471,8 @@ cc_library(
     hdrs = ["pjrt_future.h"],
     visibility = [":friends"],
     deps = [
-        ":utils",
-        "//tensorflow/core/platform:logging",
+        "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/types:span",
-        "@llvm-project//llvm:Support",
         "@tf_runtime//:hostcontext",
         "@tf_runtime//:support",
     ],
@@ -578,9 +614,32 @@ cc_library(
     hdrs = ["pjrt_c_api_client.h"],
     deps = [
         ":pjrt_client",
+        "//tensorflow/compiler/xla:shape_util",
+        "//tensorflow/compiler/xla:util",
+        "//tensorflow/compiler/xla:xla_data_proto_cc",
         "//tensorflow/compiler/xla/pjrt/c:pjrt_c_api_hdrs",
+        "//tensorflow/compiler/xla/pjrt/c:pjrt_c_api_helpers",
         "//tensorflow/compiler/xla/pjrt/c:pjrt_c_api_wrapper_impl",  # TODO(skyewm): remove
-        "//tensorflow/core/platform:casts",
         "//tensorflow/core/tpu:pjrt_api",
+        "//tensorflow/stream_executor/tpu:c_api_conversions",  # TODO(b/238999986): Remove this.
+    ],
+)
+
+cc_library(
+    name = "host_callback",
+    srcs = ["host_callback.cc"],
+    hdrs = ["host_callback.h"],
+    visibility = [":friends"],
+    deps = [":pjrt_client"],
+)
+
+tf_cc_test(
+    name = "host_callback_test",
+    srcs = ["host_callback_test.cc"],
+    deps = [
+        ":host_callback",
+        "//tensorflow/compiler/xla/tests:literal_test_util",
+        "//tensorflow/core:test",
+        "@com_google_googletest//:gtest_main",
     ],
 )

@@ -19,11 +19,14 @@ limitations under the License.
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <random>
+#include <sstream>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "absl/base/attributes.h"
@@ -81,7 +84,7 @@ class RuyProfileListener : public BenchmarkListener {
 };
 
 void RuyProfileListener::OnBenchmarkStart(const BenchmarkParams& params) {
-  ruy_profile_.reset(new ruy::profiler::ScopeProfile);
+  ruy_profile_ = std::make_unique<ruy::profiler::ScopeProfile>();
 }
 
 void RuyProfileListener::OnBenchmarkEnd(const BenchmarkResults& results) {
@@ -504,19 +507,32 @@ InputTensorData BenchmarkTfLiteModel::LoadInputTensorData(
     t_data.data = VoidUniquePtr(
         static_cast<void*>(new tflite::DynamicBuffer()),
         [](void* ptr) { delete static_cast<DynamicBuffer*>(ptr); });
-    std::string line;
-    size_t num_line = 0;
-    // Read the line with the delimiter '\0'.
-    while (std::getline(value_file, line, '\0')) {
-      num_line++;
+    if (input_file_path.size() > 3 &&
+        input_file_path.substr(input_file_path.size() - 3) == ".pb") {
+      // If input file is ".pb" file, read data as a binary.
+      std::stringstream buffer;
+      buffer << value_file.rdbuf();
       static_cast<DynamicBuffer*>(t_data.data.get())
-          ->AddString(line.data(), line.length());
-    }
-    int num_elements = GetNumElements(t.dims);
-    if (num_line != num_elements) {
-      TFLITE_LOG(FATAL) << "The number of string in the input_layer_value_file("
-                        << input_file_path << ") is " << num_line
-                        << ". It should be " << num_elements << ".";
+          ->AddString(buffer.str().data(), buffer.str().length());
+      TFLITE_LOG(INFO) << "Read " << buffer.str().length()
+                       << " bytes data from " << input_file_path << ".";
+    } else {
+      // Read input as a text.
+      std::string line;
+      size_t num_line = 0;
+      // Read the line with the delimiter '\0'.
+      while (std::getline(value_file, line, '\0')) {
+        num_line++;
+        static_cast<DynamicBuffer*>(t_data.data.get())
+            ->AddString(line.data(), line.length());
+      }
+      int num_elements = GetNumElements(t.dims);
+      if (num_line != num_elements) {
+        TFLITE_LOG(FATAL)
+            << "The number of string in the input_layer_value_file("
+            << input_file_path << ") is " << num_line << ". It should be "
+            << num_elements << ".";
+      }
     }
   } else {
     value_file.seekg(0, std::ios_base::end);
@@ -622,7 +638,7 @@ TfLiteStatus BenchmarkTfLiteModel::InitInterpreter() {
   }
   // Manually enable caching behavior in TF Lite interpreter.
   if (use_caching) {
-    external_context_.reset(new tflite::ExternalCpuBackendContext());
+    external_context_ = std::make_unique<tflite::ExternalCpuBackendContext>();
     std::unique_ptr<tflite::CpuBackendContext> cpu_backend_context(
         new tflite::CpuBackendContext());
     cpu_backend_context->SetUseCaching(true);

@@ -123,6 +123,7 @@ void CGraphOptimizerRegister(
   CONFIG_TOGGLE(constant_folding);
   CONFIG_TOGGLE(shape_optimization);
   CONFIG_TOGGLE(auto_mixed_precision);
+  CONFIG_TOGGLE(auto_mixed_precision_onednn_bfloat16);
   CONFIG_TOGGLE(auto_mixed_precision_mkl);
   CONFIG_TOGGLE(pin_to_host_optimization);
   CONFIG_TOGGLE(layout_optimizer);
@@ -340,7 +341,7 @@ void TF_GetOutputPropertiesList(TF_GraphProperties* graph_properties,
 }
 
 TF_FunctionLibraryDefinition* TF_NewFunctionLibraryDefinition(
-    TF_Buffer* graph_buf, TF_Status* status) {
+    const TF_Buffer* graph_buf, TF_Status* status) {
   TF_SetStatus(status, TF_OK, "");
   tensorflow::GraphDef graph_def;
   tensorflow::Status s = tensorflow::BufferToMessage(graph_buf, &graph_def);

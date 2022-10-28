@@ -25,7 +25,7 @@ limitations under the License.
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Location.h"
@@ -63,7 +63,7 @@ Value createLoadOrUseCachedValue(Location loc, OpBuilder* b, Value memref,
                   : b->create<LoadOp>(loc, memref);
 }
 
-DenseSet<Operation*> NoLoaderUser(SmallVectorImpl<Operation*>& ops) {
+DenseSet<Operation*> noLoaderUser(SmallVectorImpl<Operation*>& ops) {
   SmallVector<Operation*, 4> worklist;
   DenseSet<Operation*> hasLoaderOps;
   for (Operation* op : ops) {
@@ -105,8 +105,7 @@ void cleanUnusedLhloOps(Block* parent) {
         (!isa<lmhlo::TerminatorOp>(op)))
       lhloOps.push_back(&op);
   }
-  const DenseSet<Operation*>& noLoaderUser = NoLoaderUser(lhloOps);
-  for (auto* lhloOp : noLoaderUser) lhloOp->erase();
+  for (auto* lhloOp : noLoaderUser(lhloOps)) lhloOp->erase();
 }
 
 template <typename LHLO_OpTy>

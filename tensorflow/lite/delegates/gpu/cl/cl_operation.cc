@@ -115,6 +115,9 @@ std::string GetCommonOpenCLDefines(CalculationsPrecision precision) {
       result += "#define INIT_FLT4v4(v0, v1, v2, v3) (half4)(v0, v1, v2, v3)\n";
       break;
   }
+  result += "#define bool2 uchar2\n";
+  result += "#define bool3 uchar3\n";
+  result += "#define bool4 uchar4\n";
   return result;
 }
 }  // namespace

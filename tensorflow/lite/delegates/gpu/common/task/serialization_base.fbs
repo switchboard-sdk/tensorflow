@@ -79,6 +79,7 @@ enum DataType : byte {
   INT32 = 9,
   UINT64 = 10,
   INT64 = 11,
+  BOOL = 12,
 }
 
 enum MemoryType : byte {
@@ -233,8 +234,6 @@ table GPUOperation {
   compiler_options:[CompilerOption];
   tensor_to_grid:TensorToGrid;
   elementwise:bool;
-  linkable:bool;
-  check_src_channels_size:bool;
   flops:uint64;
   definition:OperationDef;
   grid_dimension:int32;

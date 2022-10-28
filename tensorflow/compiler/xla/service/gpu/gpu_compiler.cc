@@ -46,6 +46,7 @@ limitations under the License.
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
 #include "mlir/Transforms/LocationSnapshot.h"  // from @llvm-project
 #include "mlir/Transforms/Passes.h"  // from @llvm-project
+#include "tensorflow/compiler/mlir/hlo/include/mlir-hlo/Transforms/gpu_passes.h"
 #include "tensorflow/compiler/mlir/utils/name_utils.h"
 #include "tensorflow/compiler/mlir/xla/hlo_utils.h"
 #include "tensorflow/compiler/mlir/xla/type_to_shape.h"
@@ -62,7 +63,9 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/async_collective_creator.h"
 #include "tensorflow/compiler/xla/service/batchnorm_expander.h"
 #include "tensorflow/compiler/xla/service/bfloat16_normalization.h"
+#include "tensorflow/compiler/xla/service/bitcast_decomposer.h"
 #include "tensorflow/compiler/xla/service/bitcast_dtypes_expander.h"
+#include "tensorflow/compiler/xla/service/broadcast_canonicalizer.h"
 #include "tensorflow/compiler/xla/service/buffer_assignment.h"
 #include "tensorflow/compiler/xla/service/call_inliner.h"
 #include "tensorflow/compiler/xla/service/collectives_schedule_linearizer.h"
@@ -80,6 +83,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/eigh_expander.h"
 #include "tensorflow/compiler/xla/service/flatten_call_graph.h"
 #include "tensorflow/compiler/xla/service/gather_expander.h"
+#include "tensorflow/compiler/xla/service/gather_simplifier.h"
 #include "tensorflow/compiler/xla/service/gpu/alias_passthrough_params.h"
 #include "tensorflow/compiler/xla/service/gpu/all_reduce_blueconnect.h"
 #include "tensorflow/compiler/xla/service/gpu/bef_thunk.h"
@@ -135,6 +139,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/hlo_sharding_metadata.h"
 #include "tensorflow/compiler/xla/service/hlo_subcomputation_unification.h"
 #include "tensorflow/compiler/xla/service/hlo_verifier.h"
+#include "tensorflow/compiler/xla/service/layout_normalization.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/llvm_util.h"
 #include "tensorflow/compiler/xla/service/logistic_expander.h"
 #include "tensorflow/compiler/xla/service/loop_schedule_linearizer.h"
@@ -149,6 +154,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/result_caster.h"
 #include "tensorflow/compiler/xla/service/rng_bit_generator_expander.h"
 #include "tensorflow/compiler/xla/service/rng_expander.h"
+#include "tensorflow/compiler/xla/service/scatter_simplifier.h"
 #include "tensorflow/compiler/xla/service/sharding_propagation.h"
 #include "tensorflow/compiler/xla/service/sharding_remover.h"
 #include "tensorflow/compiler/xla/service/simplify_fp_conversions.h"
@@ -167,7 +173,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/core/lib/core/status.h"
-#include "tensorflow/core/lib/gtl/cleanup.h"
 #include "tensorflow/core/platform/blocking_counter.h"
 #include "tensorflow/core/platform/casts.h"
 #include "tensorflow/core/platform/env.h"
@@ -314,12 +319,6 @@ GpuCompiler::GpuCompiler(se::Platform::Id platform_id,
 Status GpuCompiler::OptimizeHloModule(
     HloModule* hlo_module, se::StreamExecutor* stream_exec,
     se::DeviceMemoryAllocator* device_allocator) {
-  // Save proto state before optimizations if we want a snapshot.
-  if (DumpingEnabledForHloModule(*hlo_module)) {
-    hlo_proto_ = std::make_unique<HloProto>();
-    *hlo_proto_->mutable_hlo_module() = hlo_module->ToProto();
-  }
-
   const DebugOptions& debug_options = hlo_module->config().debug_options();
 
   if (hlo_module->config().use_spmd_partitioning()) {
@@ -328,9 +327,7 @@ Status GpuCompiler::OptimizeHloModule(
     if (num_partitions > 1) {
       // Run some IR cleanup passes before running the SPMD partitioning
       // passes.
-      spmd_pipeline.AddInvariantChecker<HloVerifier>(
-          /*layout_sensitive=*/false,
-          /*allow_mixed_precision=*/false);
+      spmd_pipeline.AddInvariantChecker<HloVerifier>(HloVerifierOpts{});
       spmd_pipeline.AddPass<CallInliner>();
       spmd_pipeline.AddPass<ZeroSizedHloElimination>();
       spmd_pipeline.AddPass<ConditionalCanonicalizer>();
@@ -339,7 +336,6 @@ Status GpuCompiler::OptimizeHloModule(
           spmd_pipeline.AddPass<HloPassFix<HloPassPipeline>>("spmd-simplify");
 
       AlgebraicSimplifierOptions options;
-      options.set_replace_transpose_with_bitcast(false);
       options.set_enable_conv_operand_swap(false);
       // "slow" minmax means we propagate nan.
       options.set_minmax_propagate_nan(
@@ -348,8 +344,14 @@ Status GpuCompiler::OptimizeHloModule(
 
       spmd_simplify.AddPass<SortSimplifier>();
       spmd_simplify.AddPass<TupleSimplifier>();
+      if (debug_options.xla_gpu_simplify_scatters()) {
+        spmd_simplify.AddPass<ScatterSimplifier>();
+      }
       spmd_simplify.AddPass<ScatterExpander>(
           ScatterExpander::kEliminateSimpleScatters);
+      if (debug_options.xla_gpu_simplify_gathers()) {
+        spmd_simplify.AddPass<GatherSimplifier>();
+      }
       spmd_simplify.AddPass<GatherExpander>(
           GatherExpander::kEliminateSimpleGathers);
       spmd_simplify.AddPass<WhileLoopConstantSinking>();
@@ -375,8 +377,7 @@ Status GpuCompiler::OptimizeHloModule(
 
   {
     HloPassPipeline pipeline("optimization");
-    pipeline.AddInvariantChecker<HloVerifier>(/*layout_sensitive=*/false,
-                                              /*allow_mixed_precision=*/false);
+    pipeline.AddInvariantChecker<HloVerifier>(HloVerifierOpts{});
     pipeline.AddPass<AllToAllDecomposer>();
 
     HloPredicate upcaster_filter = [&](const HloInstruction* instr) {
@@ -477,15 +478,19 @@ Status GpuCompiler::OptimizeHloModule(
     // point.
     [&, &pipeline =
             pipeline.AddPass<HloPassFix<HloPassPipeline>>("simplification")] {
-      pipeline.AddInvariantCheckerDebug<HloVerifier>(
-          /*layout_sensitive=*/false,
-          /*allow_mixed_precision=*/false);
+      pipeline.AddInvariantCheckerDebug<HloVerifier>(HloVerifierOpts{});
 
       // BatchNormExpander can create zero-sized ops, so zero-sized HLO
       // elimination has to come after that pass.
       pipeline.AddPass<ZeroSizedHloElimination>();
 
+      if (debug_options.xla_gpu_simplify_gathers()) {
+        pipeline.AddPass<GatherSimplifier>();
+      }
       pipeline.AddPass<GatherExpander>(GatherExpander::kEliminateSimpleGathers);
+      if (debug_options.xla_gpu_simplify_scatters()) {
+        pipeline.AddPass<ScatterSimplifier>();
+      }
       pipeline.AddPass<ScatterExpander>(
           ScatterExpander::kEliminateSimpleScatters);
 
@@ -494,15 +499,6 @@ Status GpuCompiler::OptimizeHloModule(
       options.set_minmax_propagate_nan(
           !debug_options.xla_gpu_enable_fast_min_max());
 
-      // When transposes appear in a fusion node, we can easily adjust the
-      // multi-dimensional index to create the one needed for the operand.
-      // This is not as easy with bitcasts, because we don't have the
-      // information readily available which dimensions are permuted. In
-      // addition to that, if we have a transpose and a reshape next to each
-      // other, they will both be replaced by a bitcast, and we replace
-      // bitcast(bitcast) with one bitcast. This leads to having to
-      // linearize and then delinearize the index.
-      options.set_replace_transpose_with_bitcast(false);
       const se::Platform* platform = stream_exec->platform();
       if (platform->Name() == "ROCM") {
         // SwapConvOperands does not yet work on ROCM
@@ -557,7 +553,6 @@ Status GpuCompiler::OptimizeHloModule(
     // the reshape is just adding a unit dimension. This will help with the
     // AllGatherBroadcastReorder pass.
     AlgebraicSimplifierOptions options;
-    options.set_replace_transpose_with_bitcast(false);
     options.set_enable_conv_operand_swap(false);
     // "slow" minmax means we propagate nan.
     options.set_minmax_propagate_nan(
@@ -602,9 +597,8 @@ Status GpuCompiler::OptimizeHloModule(
     // to avoid exceeding the parameter space.
     fusion.AddPass<VariadicOpSplitter>();
     fusion.AddInvariantCheckerDebug<HloVerifier>(
-        /*layout_sensitive=*/true,
-        /*allow_mixed_precision=*/false,
-        LayoutAssignment::InstructionCanChangeLayout);
+        HloVerifierOpts{}.MakeLayoutSensitive().WithInstructionCanChangeLayout(
+            LayoutAssignment::InstructionCanChangeLayout));
     fusion.AddPass<GpuInstructionFusion>(/*may_duplicate=*/false);
     fusion.AddPass<GpuInstructionFusion>(/*may_duplicate=*/true);
     fusion.AddPass<FusionMerger>();
@@ -665,7 +659,6 @@ Status GpuCompiler::OptimizeHloModule(
 
     pipeline.AddPass<CollectivesScheduleLinearizer>();
 
-    // Now we allow replacing any transposes outside of fusions with bitcasts.
     AlgebraicSimplifierOptions options;
     options.set_is_layout_sensitive(true);
     options.set_enable_conv_operand_swap(false);
@@ -674,6 +667,7 @@ Status GpuCompiler::OptimizeHloModule(
         !debug_options.xla_gpu_enable_fast_min_max());
     pipeline.AddPass<AlgebraicSimplifier>(options);
     pipeline.AddPass<OptimizationBarrierExpander>();
+    pipeline.AddPass<BitcastDecomposer>();
     pipeline.AddPass<TupleSimplifier>();
 
     TF_RETURN_IF_ERROR(pipeline.Run(hlo_module).status());
@@ -692,9 +686,8 @@ Status GpuCompiler::PrepareHloModuleForIrEmitting(HloModule* hlo_module) {
   // the parameter.
   HloPassPipeline pipeline("GPU-ir-emit-prepare");
   pipeline.AddInvariantCheckerDebug<HloVerifier>(
-      /*layout_sensitive=*/true,
-      /*allow_mixed_precision=*/false,
-      LayoutAssignment::InstructionCanChangeLayout);
+      HloVerifierOpts{}.MakeLayoutSensitive().WithInstructionCanChangeLayout(
+          LayoutAssignment::InstructionCanChangeLayout));
 
   // Copy insertion should be performed immediately before IR emission to avoid
   // inserting unnecessary copies (later pass adds an instruction which
@@ -723,16 +716,21 @@ Status GpuCompiler::OptimizeHloPostLayoutAssignment(
     pipeline.AddPass<ReduceDecomposer>([&](const HloInstruction* r) {
       return IsReductionFromOrToContiguousDimensions(*r);
     });
+    if (hlo_module->config().debug_options().xla_gpu_normalize_layouts()) {
+      pipeline.AddPass<LayoutNormalization>();
+    }
+    pipeline.AddPass<BroadcastCanonicalizer>();
     TF_RETURN_IF_ERROR(pipeline.Run(hlo_module).status());
   }
 
   HloPassPipeline pipeline("post-layout_assignment");
   pipeline.AddInvariantCheckerDebug<HloVerifier>(
-      /*layout_sensitive=*/true,
-      /*allow_mixed_precision=*/false,
-      LayoutAssignment::InstructionCanChangeLayout);
-
-  pipeline.AddPass<ReshapeDecomposer>();
+      HloVerifierOpts{}
+          .MakeLayoutSensitive()
+          .WithInstructionCanChangeLayout(
+              LayoutAssignment::InstructionCanChangeLayout)
+          .VerifyBroadcastDimensionsOrder()
+          .VerifyReshapeIsBitcast());
 
   pipeline.AddPass<ReductionDegenerateDimRemover>();
   pipeline.AddPass<ReductionLayoutNormalizer>();
@@ -745,15 +743,6 @@ Status GpuCompiler::OptimizeHloPostLayoutAssignment(
   // duplicate or NOPs, so remove them with algebraic simplification and CSE.
   AlgebraicSimplifierOptions options;
   options.set_is_layout_sensitive(true);
-  // When transposes appear in a fusion node, we can easily adjust the
-  // multi-dimensional index to create the one needed for the operand. This
-  // is not as easy with bitcasts, because we don't have the information
-  // readily available which dimensions are permuted. In addition to that,
-  // if we have a transpose and a reshape next to each other, they will both
-  // be replaced by a bitcast, and we replace bitcast(bitcast) with one
-  // bitcast. This leads to having to linearize and then delinearize the
-  // index.
-  options.set_replace_transpose_with_bitcast(false);
   options.set_enable_conv_operand_swap(false);
   // "slow" minmax means we propagate nan.
   options.set_minmax_propagate_nan(
@@ -1034,11 +1023,9 @@ static Status CompileModuleToLlvmIrImpl(
                                       "_gpu_after_optimizations"));
 
   uint64_t start_usecs = tensorflow::Env::Default()->NowMicros();
-  mlir::MLIRContext mlir_context;
-  mlir_context
-      .loadDialect<mlir::lmhlo::LmhloDialect, mlir::mhlo::MhloDialect,
-                   mlir::arith::ArithmeticDialect, mlir::func::FuncDialect,
-                   mlir::lmhlo_gpu::LmhloGpuDialect>();
+  mlir::DialectRegistry registry;
+  IrEmitterUnnested::GetDependentDialects(registry);
+  mlir::MLIRContext mlir_context(registry);
   mlir::OwningOpRef<mlir::ModuleOp> mlir_module =
       mlir::ModuleOp::create(mlir::Builder(&mlir_context).getUnknownLoc());
 
@@ -1057,6 +1044,14 @@ static Status CompileModuleToLlvmIrImpl(
   TF_RETURN_IF_ERROR(GetMlirAllocationInfo(
       entry_function, &results->allocations, &results->output_info,
       &results->output_shape, &results->entry_func_attrs));
+
+  if (hlo_module->config().debug_options().xla_gpu_enable_mlir_lowering()) {
+    mlir::PassManager pm(&mlir_context);
+    pm.addPass(mlir::createGpuFusionRewritePass());
+    if (failed(pm.run(mlir_module.get()))) {
+      return InternalError("Failed to run gpu-fusion-rewrite pass");
+    }
+  }
 
   IrEmitterContext ir_emitter_context(
       /*hlo_module=*/nullptr, /*buffer_assignment=*/nullptr, platform_name,
@@ -1442,11 +1437,7 @@ StatusOr<std::unique_ptr<Executable>> GpuCompiler::RunBackend(
   if (embed_ir_in_executable ||
       DumpingEnabledForHloModule(gpu_executable->module())) {
     auto hlo_proto = std::make_unique<HloProto>();
-    if (hlo_proto_) {
-      *hlo_proto = *hlo_proto_;
-    } else {
-      *hlo_proto->mutable_hlo_module() = gpu_executable->module().ToProto();
-    }
+    *hlo_proto->mutable_hlo_module() = gpu_executable->module().ToProto();
     *hlo_proto->mutable_buffer_assignment() = buffer_assignment->ToProto();
     gpu_executable->set_hlo_proto(std::move(hlo_proto));
   }

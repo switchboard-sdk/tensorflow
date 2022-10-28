@@ -72,7 +72,7 @@ class TfrtCpuDevice final : public PjRtDevice {
 
   absl::string_view device_kind() const override;
 
-  std::string DebugString() const override;
+  absl::string_view DebugString() const override;
 
   std::string ToString() const override;
 
@@ -98,6 +98,7 @@ class TfrtCpuDevice final : public PjRtDevice {
  private:
   int id_;
   PjRtClient* client_ = nullptr;
+  std::string debug_string_;
 
   // TODO(zhangqiaorjc): Optimize semaphore related overhead.
   // Semaphore used to limit how many programs can be enqueued by the host
@@ -113,6 +114,7 @@ class TfrtCpuClient final : public PjRtClient {
   TfrtCpuClient(int process_index,
                 std::vector<std::unique_ptr<TfrtCpuDevice>> devices,
                 std::unique_ptr<tfrt::HostContext> host_ctx);
+  ~TfrtCpuClient();
 
   int process_index() const override { return process_index_; }
 
@@ -148,21 +150,21 @@ class TfrtCpuClient final : public PjRtClient {
 
   StatusOr<std::unique_ptr<HloCostAnalysis>> GetHloCostAnalysis() override;
 
-  StatusOr<std::unique_ptr<PjRtExecutable>> Compile(
+  StatusOr<std::unique_ptr<PjRtLoadedExecutable>> Compile(
       const XlaComputation& computation, CompileOptions options) override;
-  StatusOr<std::unique_ptr<PjRtExecutable>> Compile(
+  StatusOr<std::unique_ptr<PjRtLoadedExecutable>> Compile(
       mlir::ModuleOp module, CompileOptions options) override;
 
   StatusOr<std::optional<std::string>> ExecutableFingerprint(
-      const PjRtExecutable& executable) const override;
+      const PjRtLoadedExecutable& executable) const override;
 
   StatusOr<std::string> SerializeExecutable(
-      const PjRtExecutable& executable) const override {
+      const PjRtLoadedExecutable& executable) const override {
     return Unimplemented("SerializeExecutable not implemented on %s",
                          platform_name());
   }
 
-  StatusOr<std::unique_ptr<PjRtExecutable>> DeserializeExecutable(
+  StatusOr<std::unique_ptr<PjRtLoadedExecutable>> DeserializeExecutable(
       absl::string_view serialized, CompileOptions options) override {
     return Unimplemented("DeserializeExecutable not implemented on %s",
                          platform_name());
@@ -339,6 +341,7 @@ class TfrtCpuBuffer final : public PjRtBuffer {
 
     ~ScopedHold();
     ScopedHold(ScopedHold&& other);
+    ScopedHold& operator=(ScopedHold&& other);
 
     ScopedHold(const ScopedHold&) = delete;
     ScopedHold& operator=(const ScopedHold&) = delete;
@@ -390,22 +393,8 @@ class TfrtCpuBuffer final : public PjRtBuffer {
     friend class TfrtCpuClient;
     friend class TfrtCpuBuffer;
 
-    // Helper struct that makes it possible to move a ScopedHold through a
-    // closure.
-    using ForClosure = std::tuple<TfrtCpuBuffer*, Type, State, Status,
-                                  std::shared_ptr<TrackedTfrtCpuDeviceBuffer>>;
-
     ScopedHold(TfrtCpuBuffer* parent, Type type)
         : parent_(parent), type_(type), state_(kUninitialized) {}
-    explicit ScopedHold(const ForClosure& closure_helper)
-        : parent_(std::get<0>(closure_helper)),
-          type_(std::get<1>(closure_helper)),
-          state_(std::get<2>(closure_helper)),
-          status_(std::get<3>(closure_helper)),
-          buffer_(std::get<4>(closure_helper)) {
-      // Check the buffer is not in an error state.
-      CHECK(status_.ok() && buffer_ != nullptr);
-    }
 
     // Sets buffer state.
     void SetState(State state) { state_ = state; }
@@ -413,14 +402,9 @@ class TfrtCpuBuffer final : public PjRtBuffer {
     // Sets buffer_ and status_. Called by parent_ to initialize the hold.
     void Acquire(
         StatusOr<std::shared_ptr<TrackedTfrtCpuDeviceBuffer>>&& buffer_or);
-    // Releases the contents of *this, so *this can subsequently be
-    // deleted without releasing the parent's hold. Should be passed to the
-    // appropriate constructor of another ScopedHold, e.g., when a hold must be
-    // passed through a closure that is incompatible with std::move.
-    ForClosure ToClosure();
 
-    TfrtCpuBuffer* const parent_;
-    const Type type_;
+    TfrtCpuBuffer* parent_;
+    Type type_;
 
     // There is an invariant that if ok() then buffer_ != nullptr.
     State state_;
@@ -557,7 +541,7 @@ class TfrtCpuBuffer final : public PjRtBuffer {
   tfrt::AsyncValueRef<Status> definition_event_ ABSL_GUARDED_BY(mu_);
 };
 
-class TfrtCpuExecutable final : public PjRtExecutable {
+class TfrtCpuExecutable final : public PjRtLoadedExecutable {
  public:
   TfrtCpuExecutable(
       int num_replicas, int num_partitions,
@@ -604,21 +588,21 @@ class TfrtCpuExecutable final : public PjRtExecutable {
         cpu_executable_->shared_module()};
   }
 
-  using PjRtExecutable::Execute;
+  using PjRtLoadedExecutable::Execute;
   StatusOr<std::vector<std::vector<std::unique_ptr<PjRtBuffer>>>> Execute(
       absl::Span<const std::vector<PjRtBuffer*>> argument_handles,
       const ExecuteOptions& options,
       std::optional<std::vector<PjRtFuture<Status>>>& returned_futures)
       override;
 
-  using PjRtExecutable::ExecuteSharded;
+  using PjRtLoadedExecutable::ExecuteSharded;
   StatusOr<std::vector<std::unique_ptr<PjRtBuffer>>> ExecuteSharded(
       absl::Span<PjRtBuffer* const> argument_handles, PjRtDevice* device,
       const ExecuteOptions& options,
       std::optional<PjRtFuture<Status>>& returned_future,
       bool fill_future) override;
 
-  using PjRtExecutable::ExecutePortable;
+  using PjRtLoadedExecutable::ExecutePortable;
   StatusOr<std::vector<std::unique_ptr<PjRtBuffer>>> ExecutePortable(
       absl::Span<PjRtBuffer* const> argument_handles, PjRtDevice* device,
       const ExecuteOptions& options,

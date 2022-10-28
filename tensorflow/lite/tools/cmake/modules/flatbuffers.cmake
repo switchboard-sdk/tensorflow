@@ -23,7 +23,7 @@ OverridableFetchContent_Declare(
   flatbuffers
   GIT_REPOSITORY https://github.com/google/flatbuffers
   # Sync with tensorflow/third_party/flatbuffers/workspace.bzl
-  GIT_TAG v2.0.5
+  GIT_TAG v2.0.6
   GIT_SHALLOW TRUE
   GIT_PROGRESS TRUE
   SOURCE_DIR "${CMAKE_BINARY_DIR}/flatbuffers"
@@ -75,5 +75,6 @@ ExternalProject_Add(flatbuffers-flatc
              -DFLATBUFFERS_STATIC_FLATC=OFF
              -DFLATBUFFERS_BUILD_FLATHASH=OFF
              -DCMAKE_INSTALL_PREFIX=$CACHE{FLATC_INSTALL_PREFIX}
+             -DCMAKE_DISABLE_FIND_PACKAGE_Python3=TRUE
   EXCLUDE_FROM_ALL ${FLATC_EXCLUDE_FROM_ALL}
 )

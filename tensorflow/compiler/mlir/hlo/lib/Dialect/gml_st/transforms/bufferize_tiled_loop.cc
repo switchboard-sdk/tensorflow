@@ -38,8 +38,8 @@ limitations under the License.
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
-#include "mlir/Dialect/SCF/Transforms.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/SCF/Transforms/Transforms.h"
 #include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tensor/Transforms/Passes.h"
@@ -122,7 +122,7 @@ struct BufferizeExtractSliceOp : public OpConversionPattern<ExtractSliceOp> {
     if (!op->getParentOfType<LoopOp>()) return failure();
 
     rewriter.replaceOpWithNewOp<SubViewOp>(
-        op, adaptor.source(), op.getMixedOffsets(), op.getMixedSizes(),
+        op, adaptor.getSource(), op.getMixedOffsets(), op.getMixedSizes(),
         op.getMixedStrides());
     return success();
   }
@@ -155,14 +155,14 @@ bool isBlockArgOfTiledLoop(Value value) {
 // tensor that we read and the tile that we write to are the same.
 Value findExistingSubview(Value destMemRef) {
   if (auto toMemref = destMemRef.getDefiningOp<ToMemrefOp>()) {
-    if (auto toTensor = toMemref.tensor().getDefiningOp<ToTensorOp>()) {
-      if (!isBlockArgOfTiledLoop(toTensor.memref())) return Value{};
+    if (auto toTensor = toMemref.getTensor().getDefiningOp<ToTensorOp>()) {
+      if (!isBlockArgOfTiledLoop(toTensor.getMemref())) return Value{};
       // Scan through users of the block argument to find `subview` op.
-      for (Operation *tensorUser : toMemref.tensor().getUsers()) {
+      for (Operation *tensorUser : toMemref.getTensor().getUsers()) {
         if (auto anotherCast = mlir::dyn_cast<ToMemrefOp>(tensorUser)) {
-          for (Operation *memrefUser : anotherCast.memref().getUsers()) {
+          for (Operation *memrefUser : anotherCast.getMemref().getUsers()) {
             if (auto subview = mlir::dyn_cast<SubViewOp>(memrefUser)) {
-              if (subview.source() == destMemRef) return subview;
+              if (subview.getSource() == destMemRef) return subview;
             }
           }
         }
@@ -180,10 +180,10 @@ struct BufferizeInsertSliceOp : public OpConversionPattern<InsertSliceOp> {
   LogicalResult matchAndRewrite(
       InsertSliceOp op, OpAdaptor adaptor,
       ConversionPatternRewriter &rewriter) const final {
-    Value sourceMemRef = adaptor.source();
+    Value sourceMemRef = adaptor.getSource();
     assert(sourceMemRef.getType().isa<MemRefType>());
 
-    Value destMemRef = adaptor.dest();
+    Value destMemRef = adaptor.getDest();
     assert(destMemRef.getType().isa<MemRefType>());
 
     if (!op->getParentOfType<LoopOp>()) return failure();
@@ -293,7 +293,7 @@ struct BufferizeLoopOp : public OpConversionPattern<LoopOp> {
       auto toTensor = output.getDefiningOp<bufferization::ToTensorOp>();
       if (!toTensor || toTensor->hasOneUse()) continue;
 
-      auto alloc = toTensor.memref().getDefiningOp<memref::AllocOp>();
+      auto alloc = toTensor.getMemref().getDefiningOp<memref::AllocOp>();
       if (!alloc) continue;
 
       OpBuilder::InsertionGuard g(rewriter);

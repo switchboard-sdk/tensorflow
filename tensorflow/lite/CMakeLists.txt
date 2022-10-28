@@ -210,6 +210,9 @@ list(FILTER TFLITE_SRCS EXCLUDE REGEX ".*tflite_with_xnnpack\\.cc$")
 # Exclude Flex related files.
 list(FILTER TFLITE_SRCS EXCLUDE REGEX ".*with_selected_ops\\.cc$")
 
+# Exclude tensorflow profiler logger files
+list(FILTER TFLITE_SRCS EXCLUDE REGEX "tensorflow_profiler_logger\\.cc$")
+
 if(_TFLITE_ENABLE_MMAP)
   list(FILTER TFLITE_SRCS EXCLUDE REGEX ".*mmap_allocation_disabled\\.cc$")
 else()
@@ -305,6 +308,11 @@ if(TFLITE_ENABLE_GPU)
     ${TFLITE_DELEGATES_GPU_COMMON_TRANSFORMATIONS_SRCS}
     ${TFLITE_SOURCE_DIR}/tools/versioning/gpu_compatibility.cc
     ${TFLITE_SOURCE_DIR}/tools/versioning/op_signature.cc
+  )
+  include_directories(
+    AFTER
+    ${TFLITE_SOURCE_DIR}/delegates/gpu/common
+    ${TFLITE_SOURCE_DIR}/delegates/gpu/common/task
   )
   if(TFLITE_ENABLE_METAL AND "${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin")
     #
@@ -452,10 +460,19 @@ populate_tflite_source_vars("kernels/internal/reference/integer_ops"
 populate_tflite_source_vars("kernels/internal/reference/sparse_ops"
   TFLITE_KERNEL_INTERNAL_REF_SPARSE_OPS_SRCS
 )
-set(TFLITE_PROFILER_SRCS ${TFLITE_SOURCE_DIR}/profiling/platform_profiler.cc)
+set(TFLITE_PROFILER_SRCS
+  ${TFLITE_SOURCE_DIR}/profiling/platform_profiler.cc
+  ${TFLITE_SOURCE_DIR}/profiling/root_profiler.h
+  ${TFLITE_SOURCE_DIR}/profiling/root_profiler.cc
+)
 if(CMAKE_SYSTEM_NAME MATCHES "Android")
   list(APPEND TFLITE_PROFILER_SRCS
     ${TFLITE_SOURCE_DIR}/profiling/atrace_profiler.cc
+  )
+elseif(CMAKE_SYSTEM_NAME MATCHES "iOS")
+  enable_language(OBJCXX)
+  list(APPEND TFLITE_PROFILER_SRCS
+    ${TFLITE_SOURCE_DIR}/profiling/signpost_profiler.mm
   )
 endif()
 
@@ -515,7 +532,7 @@ target_link_libraries(tensorflow-lite
     fft2d_fftsg2d
     flatbuffers
     gemmlowp
-    ruy
+    ruy::ruy
     ${CMAKE_DL_LIBS}
     ${TFLITE_TARGET_DEPENDENCIES}
 )

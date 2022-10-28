@@ -34,6 +34,7 @@ to
 See all the [mailing lists](https://www.tensorflow.org/community/forums).
 
 ## Install
+### x86
 
 See the [TensorFlow install guide](https://www.tensorflow.org/install) for the
 [pip package](https://www.tensorflow.org/install/pip), to
@@ -61,6 +62,18 @@ commands.
 *Nightly binaries are available for testing using the
 [tf-nightly](https://pypi.python.org/pypi/tf-nightly) and
 [tf-nightly-cpu](https://pypi.python.org/pypi/tf-nightly-cpu) packages on PyPi.*
+
+### aarch64
+To install the current release on aarch64 cpu
+
+```
+$ pip install tensorflow
+```
+To update TensorFlow to the latest version, add `--upgrade` flag to the above
+commands.
+
+*Nightly binaries are available for testing using the
+[tf-nightly](https://pypi.python.org/pypi/tf-nightly) package on PyPi.*
 
 #### *Try your first TensorFlow program*
 
@@ -147,6 +160,7 @@ Build Type                    | Status                                          
 *   [TensorFlow model optimization roadmap](https://www.tensorflow.org/model_optimization/guide/roadmap)
 *   [TensorFlow White Papers](https://www.tensorflow.org/about/bib)
 *   [TensorBoard Visualization Toolkit](https://github.com/tensorflow/tensorboard)
+*   [TensorFlow Code Search](https://cs.opensource.google/tensorflow/tensorflow)
 
 Learn more about the
 [TensorFlow community](https://www.tensorflow.org/community) and how to

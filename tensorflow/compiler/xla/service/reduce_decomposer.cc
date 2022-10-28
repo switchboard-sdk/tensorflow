@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <functional>
 #include <utility>
+#include <vector>
 
 #include "tensorflow/compiler/xla/service/dfs_hlo_visitor_with_default.h"
 #include "tensorflow/compiler/xla/service/hlo_casting_utils.h"
@@ -28,6 +29,41 @@ limitations under the License.
 namespace xla {
 
 namespace {
+
+// Enforces property that all inputs to variadic reduction have same layout.
+class VariadicReductionLayoutEqualizer : public DfsHloRewriteVisitor {
+ public:
+  Status HandleReduce(HloInstruction* hlo) override {
+    auto reduce = Cast<HloReduceInstruction>(hlo);
+    std::vector<HloInstruction*> new_inputs;
+    bool changed = false;
+    for (HloInstruction* input : reduce->inputs()) {
+      auto first_input = reduce->inputs()[0];
+      auto first_input_s = first_input->shape();
+      auto input_s = input->shape();
+      if (first_input_s.layout() != input_s.layout()) {
+        Shape new_input_s = ShapeUtil::MakeShapeWithLayout(
+            input_s.element_type(), input_s.dimensions(),
+            first_input_s.layout().minor_to_major());
+        auto copy = MakeCopyHlo(input, new_input_s);
+        changed = true;
+        new_inputs.push_back(copy);
+      } else {
+        new_inputs.push_back(input);
+      }
+    }
+
+    if (changed) {
+      TF_ASSIGN_OR_RETURN(
+          auto new_reduce,
+          MakeReduceHlo(new_inputs, reduce->init_values(), reduce->dimensions(),
+                        reduce->called_computations()[0]));
+      TF_RETURN_IF_ERROR(ReplaceInstruction(reduce, new_reduce));
+    }
+
+    return Status::OK();
+  }
+};
 
 class ReduceDecomposerVisitor : public DfsHloRewriteVisitor {
  public:
@@ -111,8 +147,17 @@ class ReduceDecomposerVisitor : public DfsHloRewriteVisitor {
 
 }  // namespace
 
-StatusOr<bool> ReduceDecomposer::Run(HloModule* module) {
-  return ReduceDecomposerVisitor{custom_layout_allowed_}.RunOnModule(module);
+StatusOr<bool> ReduceDecomposer::Run(
+    HloModule* module,
+    const absl::flat_hash_set<absl::string_view>& execution_threads) {
+  TF_ASSIGN_OR_RETURN(bool changed1,
+                      VariadicReductionLayoutEqualizer{}.RunOnModule(
+                          module, execution_threads));
+  TF_ASSIGN_OR_RETURN(
+      bool changed2,
+      ReduceDecomposerVisitor{custom_layout_allowed_}.RunOnModule(
+          module, execution_threads));
+  return changed1 || changed2;
 }
 
 }  // namespace xla

@@ -46,11 +46,12 @@ struct ForwardExtractOp : public OpRewritePattern<ExtractOp> {
 
   LogicalResult matchAndRewrite(ExtractOp extract,
                                 PatternRewriter& rewriter) const override {
-    auto toTensor = extract.tensor().getDefiningOp<bufferization::ToTensorOp>();
+    auto toTensor =
+        extract.getTensor().getDefiningOp<bufferization::ToTensorOp>();
     if (!toTensor) return failure();
 
     rewriter.replaceOpWithNewOp<memref::LoadOp>(
-        extract, extract.getType(), toTensor.memref(), extract.indices());
+        extract, extract.getType(), toTensor.getMemref(), extract.getIndices());
     return success();
   }
 };
@@ -68,7 +69,7 @@ struct ForwardShapeOfOp : public OpRewritePattern<ShapeOfOp> {
     if (!toTensor) return failure();
 
     rewriter.replaceOpWithNewOp<ShapeOfOp>(shapeOf, shapeOf.getType(),
-                                           toTensor.memref());
+                                           toTensor.getMemref());
     return success();
   }
 };

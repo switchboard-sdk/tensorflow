@@ -30,27 +30,6 @@ mlir_tablegen(generated_chlo_legalize_to_hlo.inc -gen-rewriters)
 add_public_tablegen_target(MLIRChloLegalizeToHloIncGen)
 
 
-add_mlir_library(ChloPasses
-  chlo_legalize_to_hlo.cc
-  chlo_legalize_to_hlo_pass.cc
-
-  DEPENDS
-  MLIRhlo_opsIncGen
-  MLIRChloLegalizeToHloIncGen
-  MLIRMhloPassIncGen
-  MLIRLmhloPassIncGen
-
-  LINK_COMPONENTS
-  Core
-
-  LINK_LIBS PUBLIC
-  ChloDialect
-  MLIRIR
-  MLIRPass
-  MLIRRewrite
-  MLIRTransformUtils
-)
-
 add_mlir_library(MhloPasses
   broadcast_propagation.cc
   collapse_elementwise_map.cc
@@ -197,6 +176,51 @@ add_mlir_library(MhloToStandard
   MLIRTransformUtils
 )
 
+add_mlir_library(HloToLinalgUtils
+  legalize_to_linalg_utils.cc
+
+  DEPENDS
+  MLIRhlo_opsIncGen
+  MLIRMhloPassIncGen
+
+  LINK_COMPONENTS
+  Core
+
+  LINK_LIBS PUBLIC
+  LmhloDialect
+  MhloDialect
+  MhloTypeConversion
+  MLIRBufferizationDialect
+  MLIRComplexDialect
+  MLIRIR
+  MLIRPass
+  MLIRRewrite
+  MLIRTransformUtils
+)
+
+add_mlir_library(ChloPasses
+  chlo_legalize_to_hlo.cc
+  chlo_legalize_to_hlo_pass.cc
+  sparse_chlo_legalize_to_linalg.cc
+
+  DEPENDS
+  MLIRhlo_opsIncGen
+  MLIRChloLegalizeToHloIncGen
+  MLIRMhloPassIncGen
+  MLIRLmhloPassIncGen
+
+  LINK_COMPONENTS
+  Core
+
+  LINK_LIBS PUBLIC
+  ChloDialect
+  HloToLinalgUtils
+  MLIRIR
+  MLIRPass
+  MLIRRewrite
+  MLIRTransformUtils
+)
+
 add_mlir_library(MhloToLinalg
   legalize_to_linalg.cc
 
@@ -208,6 +232,7 @@ add_mlir_library(MhloToLinalg
   Core
 
   LINK_LIBS PUBLIC
+  HloToLinalgUtils
   LmhloDialect
   MhloDialect
   MhloTypeConversion
@@ -248,6 +273,16 @@ target_link_libraries(AllMhloPasses INTERFACE
   MhloToArithmeticConversion
   MhloToMemrefConversion
   MhloToStandard
+  HloToLinalgUtils
   MhloToLinalg
   MhloShapeOpsToStandard
+)
+
+add_library(AllGmlStPasses INTERFACE)
+target_link_libraries(AllGmlStPasses INTERFACE
+  GmlStPasses
+  GmlStTestPasses
+  MLIRHLOGmlStPipeline
+  MLIRFuncDialect
+  MLIRPass
 )

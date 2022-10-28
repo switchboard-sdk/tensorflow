@@ -38,12 +38,17 @@ limitations under the License.
 #include "tensorflow/lite/schema/schema_generated.h"
 #define GET_ATTRDEF_CLASSES
 #include "tensorflow/compiler/mlir/lite/ir/tfl_ops_attrdefs.h.inc"
-#include "tensorflow/compiler/mlir/lite/ir/tfl_structs.h.inc"
 
 namespace mlir {
 namespace TFL {
 
 typedef TFLDialect TensorFlowLiteDialect;
+
+// The Control type is a token-like value that models control dependencies
+class ControlType : public Type::TypeBase<ControlType, Type, TypeStorage> {
+ public:
+  using Base::Base;
+};
 
 #include "tensorflow/compiler/mlir/lite/ir/tfl_ops_interface.h.inc"
 

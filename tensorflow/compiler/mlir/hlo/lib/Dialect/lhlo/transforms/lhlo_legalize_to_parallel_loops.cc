@@ -22,7 +22,7 @@ limitations under the License.
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -98,12 +98,12 @@ MappedIvs mapWindowIvsToInput(OpTy op, Value operand, ValueRange ivs,
                               ValueRange windowIvs, OpBuilder* b) {
   MappedIvs mappedIvs;
 
-  if (!op.getWindowStrides().hasValue()) {
+  if (!op.getWindowStrides().has_value()) {
     op.emitOpError("No window strides specified.");
   }
   auto windowStrides = op.getWindowStrides().getValue();
 
-  if (!op.getPadding().hasValue()) {
+  if (!op.getPadding().has_value()) {
     op.emitOpError("No padding specified.");
   }
   auto padding = op.getPadding().getValue();
@@ -425,8 +425,8 @@ class ReduceWindowOpConverter
     rewriter->setInsertionPointToStart(windowLoop.getBody());
     auto loc = reduceWindowOp.getLoc();
 
-    if (reduceWindowOp.getBaseDilations().hasValue() ||
-        reduceWindowOp.getWindowDilations().hasValue()) {
+    if (reduceWindowOp.getBaseDilations().has_value() ||
+        reduceWindowOp.getWindowDilations().has_value()) {
       reduceWindowOp.emitRemark(
           "Lowering to parallel loops does not support `base_dilations` or "
           "`window_dilations` attributes yet. The attributes will be ignored.");
@@ -648,7 +648,7 @@ class SelectAndScatterOpConverter
     Value trueI1 = b->create<mlir::arith::ConstantOp>(
         loc, b->getI1Type(), b->getIntegerAttr(b->getI1Type(), 1));
 
-    TypeRange iterArgTypes{ivsValFlag->toVector()};
+    const TypeRange iterArgTypes{ValueRange{ivsValFlag->toVector()}};
     Value operandElem =
         b->create<memref::LoadOp>(loc, sAndSOp.getOperand(), operandIvs);
     auto ifInit = b->create<scf::IfOp>(loc, iterArgTypes, ivsValFlag->isInit(),

@@ -897,6 +897,7 @@ config_setting(
 package_group(
     name = "internal",
     packages = [
+        "//devtools/python/indexer/...",
         "//learning/brain/keras/...",
         "//learning/brain/mlir/...",
         "//learning/brain/tfrt/...",
@@ -942,6 +943,7 @@ bzl_library(
         "//tensorflow/core/platform:build_config_root_bzl",
         "//tensorflow/core/platform:rules_cc_bzl",
         "//tensorflow/core/platform/default:cuda_build_defs_bzl",
+        "//third_party/compute_library:build_defs_bzl",
         "//third_party/llvm_openmp:openmp_bzl",
         "//third_party/mkl:build_defs_bzl",
         "//third_party/mkl_dnn:build_defs_bzl",
@@ -1060,6 +1062,7 @@ tf_cc_shared_library(
         "//tensorflow/c:kernels_experimental",
         "//tensorflow/c:logging",
         "//tensorflow/c:ops",
+        "//tensorflow/cc/saved_model:fingerprinting_impl",
         "//tensorflow/cc/saved_model:loader_lite_impl",
         "//tensorflow/cc/saved_model:metrics_impl",
         "//tensorflow/compiler/tf2tensorrt:op_converter_registry_impl",
@@ -1173,12 +1176,16 @@ tf_cc_shared_library(
         ],
     }),
     per_os_targets = True,
+    roots = [
+        "//tensorflow/cc:cc_ops",
+        "//tensorflow/cc:client_session",
+        "//tensorflow/cc:const_op",
+        "//tensorflow/cc:scope",
+    ],
     soversion = VERSION,
     static_deps = PACKAGE_STATIC_DEPS,
     visibility = ["//visibility:public"],
-    # copybara:comment_begin(OSS Windows only: DEF file for exported symbols)
     win_def_file = ":tensorflow_filtered_def_file",
-    # copybara:comment_end
     deps = [
         "//tensorflow/c:c_api",
         "//tensorflow/c:env",
@@ -1189,9 +1196,7 @@ tf_cc_shared_library(
         "//tensorflow/c/eager:c_api",
         "//tensorflow/c/experimental/filesystem:filesystem_interface",
         "//tensorflow/c/experimental/stream_executor:stream_executor",
-        "//tensorflow/cc:cc_ops",
-        "//tensorflow/cc:client_session",
-        "//tensorflow/cc:scope",
+        "//tensorflow/cc/saved_model:fingerprinting_impl",
         "//tensorflow/cc/saved_model:loader_lite_impl",
         "//tensorflow/cc/saved_model:metrics_impl",
         "//tensorflow/core:framework_internal_impl",

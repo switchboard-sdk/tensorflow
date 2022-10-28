@@ -24,7 +24,7 @@ limitations under the License.
 #include "mlir-hlo/Dialect/mhlo/transforms/passes.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"  // TF:llvm-project
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
@@ -187,7 +187,6 @@ struct CaseOpPattern : public OpConversionPattern<mhlo::CaseOp> {
     return success();
   }
 };
-
 
 struct LegalizeControlFlowPass
     : public LegalizeControlFlowPassBase<LegalizeControlFlowPass> {

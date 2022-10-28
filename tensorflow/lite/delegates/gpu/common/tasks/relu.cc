@@ -16,6 +16,7 @@ limitations under the License.
 #include "tensorflow/lite/delegates/gpu/common/tasks/relu.h"
 
 #include <string>
+#include <utility>
 
 #include "absl/strings/str_cat.h"
 
@@ -26,7 +27,7 @@ void CreateReLU(const ReLUAttributes& attr, CalculationsPrecision precision,
                 Arguments* args, std::string* code) {
   std::string min_func;
   if (attr.alpha != 0.0f) {
-    min_func = "min(in_out_value * args.alpha, INIT_FLT(0.0f))";
+    min_func = "min(in_value * args.alpha, INIT_FLT(0.0f))";
     if (precision == CalculationsPrecision::F32) {
       args->AddFloat("alpha", attr.alpha);
     } else {
@@ -41,19 +42,18 @@ void CreateReLU(const ReLUAttributes& attr, CalculationsPrecision precision,
     } else {
       args->AddHalf("clip", half(attr.clip));
     }
-    *code = absl::StrCat("in_out_value = clamp(in_out_value, " + min_func +
+    *code = absl::StrCat("out_value = clamp(in_value, " + min_func +
                          ", INIT_FLT4(args.clip));");
   } else {
-    *code = absl::StrCat("in_out_value = max(in_out_value, ", min_func, ");");
+    *code = absl::StrCat("out_value = max(in_value, ", min_func, ");");
   }
 }
 
 GPUOperation CreateReLU(const OperationDef& definition,
                         const ReLUAttributes& attr) {
-  GPUOperation op(definition);
-  op.elementwise_ = true;
-  CreateReLU(attr, definition.precision, &op.args_, &op.code_);
-  return op;
+  ElementwiseDescriptor op_desc;
+  CreateReLU(attr, definition.precision, &op_desc.args, &op_desc.code);
+  return CreateGpuOperation(definition, std::move(op_desc));
 }
 
 }  // namespace gpu

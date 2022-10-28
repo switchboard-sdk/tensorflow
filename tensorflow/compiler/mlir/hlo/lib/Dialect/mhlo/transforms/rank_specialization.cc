@@ -29,7 +29,7 @@ limitations under the License.
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/SCF/SCF.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Block.h"
@@ -496,7 +496,7 @@ Value materializeScalarRankSpecializationCase(
             loc, b.create<tensor::CastOp>(
                       loc, deriveUnrankedTensorTypes(unshapedResult.getType()),
                       unshapedResult)
-                     .dest());
+                     .getDest());
       },
       elseBuilderFn);
 
@@ -550,7 +550,7 @@ Value materializeEqualShapesRankSpecializationCase(
             loc, b.create<tensor::CastOp>(
                       loc, deriveUnrankedTensorTypes(unshapedResult.getType()),
                       unshapedResult)
-                     .dest());
+                     .getDest());
       },
       elseBuilderFn);
 

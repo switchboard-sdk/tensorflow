@@ -26,6 +26,11 @@ def ChloLegalizeToHloPass : Pass<"chlo-legalize-to-hlo", "func::FuncOp"> {
   ];
 }
 
+def ChloLegalizeToLinalgPass : Pass<"sparse-chlo-legalize-to-linalg", "func::FuncOp"> {
+  let summary = "Legalize from sparse ops in CHLO dialect to Linalg dialect.";
+  let constructor = "createLegalizeSparseChloToLinalgPass()";
+}
+
 def HloCanonicalizeReductionPass : Pass<"hlo-canonicalize-reduction", "func::FuncOp"> {
   let summary = "canonicalize reduction ops to be suitable for codegen.";
   let constructor = "createHloCanonicalizeReductionPass()";
@@ -216,6 +221,8 @@ def GroupReductionDimensionsPass
 def TestUnfuseBatchNormPass : Pass<"mhlo-test-unfuse-batch-norm", "func::FuncOp"> {
   let summary = "Test pass for materializing 'broadcast_dimensions' attributes.";
   let constructor = "createTestUnfuseBatchNormPass()";
+
+  let dependentDialects = ["arith::ArithmeticDialect", "shape::ShapeDialect", "tensor::TensorDialect"];
 }
 
 def ExpandHloTuplesPass : Pass<"expand-hlo-tuples", "ModuleOp"> {

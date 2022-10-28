@@ -28,7 +28,6 @@ from tensorflow.core.framework import dataset_metadata_pb2
 from tensorflow.core.framework import dataset_options_pb2
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python import tf2
-from tensorflow.python.compat import compat
 from tensorflow.python.data.ops import iterator_ops
 from tensorflow.python.data.ops import options as options_lib
 from tensorflow.python.data.ops import structured_function
@@ -1722,7 +1721,7 @@ class DatasetV2(collections_abc.Iterable, tracking_base.Trackable,
       ```python
       dataset = make_dataset()
       def custom_shard_func(element):
-        return 0
+        return np.int64(0)
       dataset.save(
           path="/path/to/data", ..., shard_func=custom_shard_func)
       ```
@@ -1790,12 +1789,6 @@ class DatasetV2(collections_abc.Iterable, tracking_base.Trackable,
     tf.Tensor(1, shape=(), dtype=int64)
 
 
-    Note that to load a previously saved dataset, you need to specify
-    `element_spec` -- a type signature of the elements of the saved dataset,
-    which can be obtained via `tf.data.Dataset.element_spec`. This requirement
-    exists so that shape inference of the loaded dataset does not need to
-    perform I/O.
-
     If the default option of sharding the saved dataset was used, the element
     order of the saved dataset will be preserved when loading it.
 
@@ -1819,8 +1812,8 @@ class DatasetV2(collections_abc.Iterable, tracking_base.Trackable,
       element_spec: Optional. A nested structure of `tf.TypeSpec` objects
         matching the structure of an element of the saved dataset and specifying
         the type of individual element components. If not provided, the nested
-        structure of `tf.TypeSpec` saved with the saved dataset is used. This
-        argument needs to be provided if the method is executed in graph mode.
+        structure of `tf.TypeSpec` saved with the saved dataset is used. Note
+        that this argument is required in graph mode.
       compression: Optional. The algorithm to use to decompress the data when
         reading it. Supported options are `GZIP` and `NONE`. Defaults to `NONE`.
       reader_func: Optional. A function to control how to read data from shards.
@@ -2234,8 +2227,7 @@ name=None))
 
     >>> dataset = tf.data.Dataset.from_tensor_slices(
     ...     [[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    >>> dataset = dataset.flat_map(
-    ...     lambda x: tf.data.Dataset.from_tensor_slices(x))
+    >>> dataset = dataset.flat_map(tf.data.Dataset.from_tensor_slices)
     >>> list(dataset.as_numpy_iterator())
     [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -6435,20 +6427,10 @@ class _DirectedInterleaveDataset(DatasetV2):
 
 def _apply_rewrite(dataset, rewrite):
   # pylint: disable=protected-access
-  if not compat.forward_compatible(2022, 6, 6):
-    return dataset
-
-  try:
-    return _VariantDataset(
-        gen_dataset_ops.rewrite_dataset(dataset._variant_tensor, rewrite,
-                                        **dataset._flat_structure),
-        dataset.element_spec)
-  except AttributeError as e:
-    if "has no attribute 'rewrite_dataset'" in str(e):
-      # The TF server may be outdated. This try/except can be removed after 6/4
-      # when the forward compatibility window elapses.
-      return dataset
-    raise e
+  return _VariantDataset(
+      gen_dataset_ops.rewrite_dataset(dataset._variant_tensor, rewrite,
+                                      **dataset._flat_structure),
+      dataset.element_spec)
 
 
 def _collect_resource_inputs(op):
