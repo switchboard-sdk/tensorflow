@@ -66,6 +66,7 @@ limitations under the License.
 #include "tensorflow/lite/kernels/internal/reference/neg.h"
 #include "tensorflow/lite/kernels/internal/reference/pad.h"
 #include "tensorflow/lite/kernels/internal/reference/pooling.h"
+#include "tensorflow/lite/kernels/internal/reference/pow.h"
 #include "tensorflow/lite/kernels/internal/reference/prelu.h"
 #include "tensorflow/lite/kernels/internal/reference/process_broadcast_shapes.h"
 #include "tensorflow/lite/kernels/internal/reference/quantize.h"
@@ -836,17 +837,6 @@ inline void SparseToDense(const std::vector<std::vector<TI>>& indices,
     const T value = values[i];
     output_data[Offset(output_shape, index[0], index[1], index[2], index[3])] =
         value;
-  }
-}
-
-template <typename T>
-inline void Pow(const RuntimeShape& input1_shape, const T* input1_data,
-                const RuntimeShape& input2_shape, const T* input2_data,
-                const RuntimeShape& output_shape, T* output_data) {
-  const int flat_size =
-      MatchingFlatSize(input1_shape, input2_shape, output_shape);
-  for (int i = 0; i < flat_size; ++i) {
-    output_data[i] = std::pow(input1_data[i], input2_data[i]);
   }
 }
 
